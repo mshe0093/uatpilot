@@ -23,6 +23,7 @@ def _isolated_env(monkeypatch):
         "GEMINI_API_KEY",
         "GROQ_API_KEY",
         "OPENROUTER_API_KEY",
+        "GITHUB_TOKEN",
         "UATPILOT_PROVIDER",
         "UATPILOT_MODEL",
         "UATPILOT_LLM_BASE_URL",
