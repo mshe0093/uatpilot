@@ -223,3 +223,28 @@ def test_rate_limit_becomes_agent_error(tmp_path):
     )
     with pytest.raises(AgentError, match="rate limit"):
         list(g.generate("AC-1.1 ping", "r.md"))
+
+
+def test_doctor_reports_missing_key(tmp_path):
+    from typer.testing import CliRunner
+
+    from uatpilot.cli import app
+
+    r = CliRunner().invoke(app, ["doctor"], env={"UATPILOT_PROVIDER": "gemini"})
+    assert r.exit_code == 2 and "No key found" in r.output
+
+
+def test_doctor_succeeds_on_a_tool_call(monkeypatch):
+    from typer.testing import CliRunner
+
+    from uatpilot import llm
+    from uatpilot.cli import app
+
+    fake = FakeOpenAI([completion(tool_call("report", {"status": "ok"}))])
+    real = llm.make_backend
+    monkeypatch.setattr(llm, "make_backend", lambda s, m, client=None: real(s, m, fake))
+    r = CliRunner().invoke(
+        app, ["doctor"], env={"UATPILOT_PROVIDER": "gemini", "GEMINI_API_KEY": "AIzaTESTKEY0123"}
+    )
+    assert r.exit_code == 0, r.output
+    assert "Working" in r.output and "AIza…23" in r.output and "TESTKEY" not in r.output

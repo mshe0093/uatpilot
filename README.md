@@ -136,11 +136,15 @@ provider is picked from whichever key is present:
 | Google Gemini | `GEMINI_API_KEY` ([get one](https://aistudio.google.com/apikey)) | `gemini-2.5-flash` | free tier |
 | Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | free tier |
 | OpenRouter | `OPENROUTER_API_KEY` | a `:free` Llama model | free tier |
+| GitHub Models | your `gh` login (or `GITHUB_TOKEN`), with `UATPILOT_PROVIDER=github` | `openai/gpt-4.1` | free tier |
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-opus-5-5` | paid |
 
 Free tiers are rate limited, and Google may use free-tier prompts to improve its models, so only
 point it at sandbox data. Every model's output still goes through the same strict schema and the
 same triage floor.
+
+Check the setup with `uatpilot doctor`: it makes one small tool call and says whether the
+provider works (the key is only ever printed masked).
 
 Dashboard: `uatpilot serve` (API on :8000) and `cd web && npm install && npm run dev` (:3000).
 Docker: `docker build -t uatpilot . && docker run -p 8000:8000 uatpilot` serves both on :8000.
@@ -214,7 +218,7 @@ The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices
 
 ## Tests
 
-`pytest` runs 88 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
+`pytest` runs 90 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
 booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1. No
 network and no API key needed.
 

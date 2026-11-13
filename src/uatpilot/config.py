@@ -45,6 +45,11 @@ PROVIDERS: dict[str, Provider] = {
         "meta-llama/llama-3.3-70b-instruct:free",
         free_tier=True,
     ),
+    # GitHub Models: free and rate limited for any GitHub account. The key is a GitHub token;
+    # when GITHUB_TOKEN is unset, the GitHub CLI's login is used (see github_cli_token).
+    "github": Provider(
+        "GITHUB_TOKEN", "https://models.github.ai/inference", "openai/gpt-4.1", free_tier=True
+    ),
 }
 
 
@@ -106,7 +111,10 @@ class Settings:
 
     @property
     def llm_api_key(self) -> str | None:
-        return os.getenv(PROVIDERS[self.provider].key_env) or None
+        key = os.getenv(PROVIDERS[self.provider].key_env) or None
+        if key is None and self.provider == "github":
+            key = github_cli_token()
+        return key
 
     @property
     def llm_base_url(self) -> str | None:
@@ -119,6 +127,24 @@ class Settings:
     def host_allowed(self, url: str) -> bool:
         host = (urlparse(url).hostname or "").lower()
         return host in self.allowed_hosts
+
+
+def github_cli_token() -> str | None:
+    """The token of the GitHub CLI's current login, if `gh` is installed and signed in."""
+    import shutil
+    import subprocess
+
+    gh = shutil.which("gh")
+    if gh is None:
+        return None
+    try:
+        out = subprocess.run(  # noqa: S603 (fixed argv, no shell)
+            [gh, "auth", "token"], capture_output=True, text=True, timeout=10, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    token = out.stdout.strip()
+    return token if out.returncode == 0 and token else None
 
 
 def get_settings() -> Settings:

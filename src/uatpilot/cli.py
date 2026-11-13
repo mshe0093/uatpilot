@@ -241,6 +241,52 @@ def run_evaluation(
 
 
 @app.command()
+def doctor() -> None:
+    """Check the configured model provider with one small tool call (costs one request)."""
+    from uatpilot.llm import AgentError, Tool, ToolLoop, ToolOutcome
+
+    settings = get_settings()
+    key = settings.llm_api_key if settings.provider != "anthropic" else None
+    console.print(f"Provider: {settings.provider}   Model: {settings.model}")
+    if not has_llm_credentials(settings):
+        console.print(
+            "[red]No key found.[/red] Put one of GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY "
+            "or ANTHROPIC_API_KEY in .env (see .env.example)."
+        )
+        raise typer.Exit(2)
+    if key:
+        console.print(f"Key: {key[:4]}…{key[-2:]} ({len(key)} characters)")
+    loop = ToolLoop(
+        settings=settings,
+        system="You are a connectivity check. Call the report tool exactly once.",
+        tools=[
+            Tool(
+                name="report",
+                description="Report that tool calling works.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"status": {"type": "string", "enum": ["ok"]}},
+                    "required": ["status"],
+                },
+                handler=lambda args: ToolOutcome("Recorded.", accepted=args.get("status")),
+            )
+        ],
+        submit_tool="report",
+        nudge="Call the report tool now with status ok.",
+        max_tokens=2000,
+    )
+    try:
+        list(loop.run("Run the connectivity check."))
+    except AgentError as exc:
+        console.print(f"[red]Failed:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    console.print(
+        f"[green]Working.[/green] {settings.model_label} answered with a tool call "
+        f"({loop.usage['model_calls']} request(s))."
+    )
+
+
+@app.command()
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     """Start the API + dashboard."""
     import uvicorn
