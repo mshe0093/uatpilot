@@ -8,6 +8,9 @@ structured UAT test cases, runs them, and reports pass/fail up the chain, by han
 spreadsheet, every release. UATPilot automates that loop and keeps a human in charge of the
 decisions.
 
+![UATPilot dashboard: pass/fail trend per run, test cases with their latest result, and an
+expanded failure showing its triage, a reviewer decision box and the raw evidence](docs/assets/dashboard.png)
+
 1. **Generate.** A Claude tool-use agent reads the requirements doc (and the target's OpenAPI spec,
    if there is one), *looks at the real target first* (read-only `http_probe` for APIs,
    `inspect_page` in a real browser for web UIs), and writes test cases through a strict Pydantic
@@ -175,7 +178,7 @@ The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices
 
 ## Tests
 
-`pytest` runs 70+ offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
+`pytest` runs 79 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
 booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1. No
 network and no API key needed.
 

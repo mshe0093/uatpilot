@@ -15,15 +15,27 @@ export function GeneratePanel({ enabled, allowedHosts, token, onSaved }: {
   const [text, setText] = useState("");
   const [kind, setKind] = useState<"api" | "ui">("api");
   const [baseUrl, setBaseUrl] = useState("https://restful-booker.herokuapp.com");
+  const [spec, setSpec] = useState<{ name: string; text: string } | null>(null);
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function pickSpec(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 2_000_000) {
+      setError("That spec is over 2 MB; trim it to the endpoints under test.");
+      return;
+    }
+    setError(null);
+    setSpec({ name: file.name, text: await file.text() });
+  }
 
   async function go() {
     setBusy(true); setError(null); setEvents([]);
     try {
       await streamEvents("/api/generate",
-        { source_name: name, requirements: text, base_url: baseUrl, target_kind: kind },
+        { source_name: name, requirements: text, base_url: baseUrl, target_kind: kind,
+          openapi: spec?.text ?? null },
         (ev) => {
           setEvents((prev) => [...prev, ev]);
           if (ev.type === "saved") onSaved(ev.requirement_set_id);
@@ -45,7 +57,7 @@ export function GeneratePanel({ enabled, allowedHosts, token, onSaved }: {
           <span className="mono">uatpilot generate</span> from the CLI.
         </p>
       )}
-      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr 120px" }}>
+      <div className="grid gen-grid">
         <label className="field">Document name
           <input value={name} onChange={(e) => setName(e.target.value)} disabled={!enabled} />
         </label>
@@ -68,6 +80,24 @@ export function GeneratePanel({ enabled, allowedHosts, token, onSaved }: {
         <textarea value={text} onChange={(e) => setText(e.target.value)} disabled={!enabled}
           placeholder="## US-1 ...&#10;- AC-1.1 ..." />
       </label>
+      {kind === "api" && (
+        <div className="toolbar" style={{ marginTop: 12 }}>
+          <label className="btn" style={{ opacity: enabled ? 1 : 0.5 }}>
+            {spec ? "Replace OpenAPI spec" : "Add OpenAPI spec (optional)"}
+            <input type="file" accept=".json,.yaml,.yml,application/json,text/yaml" hidden
+              disabled={!enabled} onChange={(e) => void pickSpec(e.target.files?.[0])} />
+          </label>
+          {spec && (
+            <>
+              <span className="small">{spec.name} ({Math.ceil(spec.text.length / 1024)} KB)</span>
+              <button className="btn" onClick={() => setSpec(null)}>Remove</button>
+            </>
+          )}
+          <span className="muted small">
+            Lets the agent add whole-response schema checks. Read in your browser, sent as text.
+          </span>
+        </div>
+      )}
       <div className="toolbar" style={{ marginTop: 12 }}>
         <button className="btn primary" disabled={!enabled || busy || text.length < 20} onClick={go}>
           {busy ? "Agent working…" : "Generate test cases"}

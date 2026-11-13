@@ -28,7 +28,12 @@ function line(ev: StreamEvent): React.ReactNode {
     case "batch_done":
       return <strong>Done: {ev.pass} passed, {ev.fail} failed</strong>;
     case "start":
-      return <span className="muted">Reading {ev.source_name} for {ev.target}</span>;
+      return (
+        <span className="muted">
+          Reading {ev.source_name} for {ev.target}: {ev.criteria ?? 0} acceptance criteria found
+          {ev.openapi ? ", with an OpenAPI spec" : ""}
+        </span>
+      );
     case "text":
       return <span className="muted">{ev.text}</span>;
     case "tool_call":

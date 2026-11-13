@@ -97,7 +97,7 @@ export type StreamEvent =
   | { type: "rerun"; test_case_id: string; passed: boolean }
   | { type: "case_result"; run: Run; title: string }
   | { type: "batch_done"; batch_id: string; pass: number; fail: number }
-  | { type: "start"; source_name: string; target: string }
+  | { type: "start"; source_name: string; target: string; criteria?: number; openapi?: boolean }
   | { type: "text"; text: string }
   | { type: "tool_call"; id: string; name: string; input: unknown }
   | { type: "tool_result"; id: string; name: string; is_error: boolean; content: string }

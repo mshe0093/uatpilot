@@ -122,3 +122,5 @@ details summary { cursor: pointer; }
   background: var(--surface); }
 @media (max-width: 640px) { .review { grid-template-columns: 1fr; } }
 table.trace td.result-fail { font-weight: 600; }
+.gen-grid { grid-template-columns: 1fr 1fr 120px; }
+@media (max-width: 640px) { .gen-grid { grid-template-columns: 1fr; } }
