@@ -17,7 +17,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from uatpilot.config import get_settings, has_claude_credentials
+from uatpilot.config import get_settings, has_llm_credentials, load_dotenv
 from uatpilot.db import Store
 from uatpilot.export import to_csv, to_junit, to_markdown
 from uatpilot.llm import AgentError
@@ -27,6 +27,13 @@ from uatpilot.requirements import coverage, extract_criteria
 from uatpilot.target import TargetNotAllowed, check_target
 
 app = typer.Typer(add_completion=False, help="UAT test cases from requirements, run for real.")
+
+
+@app.callback()
+def _startup() -> None:
+    load_dotenv()  # a local .env (git-ignored) can hold the API key
+
+
 console = Console()
 
 
@@ -53,8 +60,11 @@ def generate(
     except TargetNotAllowed as exc:
         raise typer.BadParameter(str(exc)) from exc
     spec_text = _load_spec(openapi, settings) if openapi else None
-    if not has_claude_credentials():
-        console.print("[red]Generation needs Claude: set ANTHROPIC_API_KEY.[/red]")
+    if not has_llm_credentials(settings):
+        console.print(
+            "[red]Generation needs a model. Free: set GEMINI_API_KEY (or GROQ_API_KEY / "
+            "OPENROUTER_API_KEY) in .env. Paid: ANTHROPIC_API_KEY.[/red]"
+        )
         raise typer.Exit(2)
     gen = Generator(base_url=base_url, target_kind=kind, settings=settings)
     try:
@@ -72,7 +82,7 @@ def generate(
         raw_text=requirements.read_text(encoding="utf-8"),
         target_kind=kind.value,
         base_url=base_url,
-        generated_by=f"claude:{settings.model}",
+        generated_by=settings.model_label,
         drafts=gen.suite.test_cases,
         coverage=gen.coverage,
     )

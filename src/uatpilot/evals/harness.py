@@ -27,7 +27,7 @@ from uatpilot.db import Store
 from uatpilot.evals.mutations import CATALOGUE, TRIAGE_SCENARIOS, Mutation, TriageScenario
 from uatpilot.evals.proxy import FaultProxy
 from uatpilot.models import TestCase
-from uatpilot.pipeline import run_case, use_claude
+from uatpilot.pipeline import run_case, use_llm
 from uatpilot.runner import execute
 from uatpilot.triage import TriageAgent
 
@@ -101,7 +101,7 @@ def run_eval(
         # 3. triage
         agent = (
             TriageAgent(base_url=base, client=client, settings=settings)
-            if use_claude(settings)
+            if use_llm(settings)
             else None
         )
         triage_rows = []
@@ -141,8 +141,8 @@ def run_eval(
     return {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "requirement_set": {k: rs[k] for k in ("id", "source_name", "base_url", "generated_by")},
-        "triage_engine": "claude" if agent else "rules",
-        "model": settings.model if agent else None,
+        "triage_engine": "llm" if agent else "rules",
+        "model": settings.model_label if agent else None,
         "baseline": {
             "cases": len(cases),
             "stable_pass": len(stable),

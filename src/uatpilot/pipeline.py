@@ -7,7 +7,7 @@ from typing import Any
 
 import anthropic
 
-from uatpilot.config import Settings, has_claude_credentials
+from uatpilot.config import Settings, has_llm_credentials
 from uatpilot.db import Store, new_id
 from uatpilot.llm import Event
 from uatpilot.models import RunResult, RunStatus, TestCase
@@ -15,12 +15,12 @@ from uatpilot.runner import execute
 from uatpilot.triage import TriageAgent, failure_signature, first_failure, triage_or_fallback
 
 
-def use_claude(settings: Settings) -> bool:
+def use_llm(settings: Settings) -> bool:
     if settings.engine == "rules":
         return False
-    if settings.engine == "claude":
+    if settings.engine == "llm":
         return True
-    return has_claude_credentials()
+    return has_llm_credentials(settings)
 
 
 def run_suite(
@@ -39,9 +39,7 @@ def run_suite(
     base = base_url or rs["base_url"]
     cases = [c for c in store.test_cases(set_id) if not case_ids or c.id in case_ids]
     agent = (
-        TriageAgent(base_url=base, client=client, settings=settings)
-        if use_claude(settings)
-        else None
+        TriageAgent(base_url=base, client=client, settings=settings) if use_llm(settings) else None
     )
     batch_id = store.start_batch(set_id, base)
     yield {
@@ -49,7 +47,7 @@ def run_suite(
         "batch_id": batch_id,
         "total": len(cases),
         "base_url": base,
-        "triage_engine": "claude" if agent else "rules",
+        "triage_engine": settings.model_label if agent else "rules",
     }
     counts = {"pass": 0, "fail": 0}
     for case in cases:

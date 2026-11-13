@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "uatpilot"
-version = "0.2.0"
+version = "0.3.0"
 description = "Turns a requirements doc into structured UAT test cases, runs them against a real target, triages failures and reports the results on a dashboard."
 readme = "README.md"
 license = { text = "MIT" }
@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "anthropic>=2.8",
+    "openai>=1.50",
     "httpx>=0.27",
     "pydantic>=2.6",
     "jsonschema>=4.20",

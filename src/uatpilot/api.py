@@ -22,12 +22,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from uatpilot import __version__
-from uatpilot.config import Settings, get_settings, has_claude_credentials
+from uatpilot.config import Settings, get_settings, has_llm_credentials, load_dotenv
 from uatpilot.db import Store
 from uatpilot.export import to_csv, to_junit, to_markdown, traceability
 from uatpilot.llm import AgentError
 from uatpilot.models import TargetKind, TriageLabel
-from uatpilot.pipeline import run_suite, use_claude
+from uatpilot.pipeline import run_suite, use_llm
 from uatpilot.requirements import condense_openapi, parse_spec
 from uatpilot.target import TargetNotAllowed, check_target
 
@@ -84,7 +84,9 @@ class _Limiter:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or get_settings()
+    if settings is None:
+        load_dotenv()
+        settings = get_settings()
     store = Store(settings.db_path)
     busy = threading.Lock()  # one suite run at a time: be polite to the public sandboxes
     limiter = _Limiter(limit=int(os.getenv("UATPILOT_WRITE_LIMIT_PER_HOUR", "20")), window_s=3600)
@@ -125,8 +127,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "status": "ok",
             "version": __version__,
-            "claude_available": use_claude(settings),
-            "generation_available": settings.engine != "rules" and has_claude_credentials(),
+            "llm_available": use_llm(settings),
+            "model": settings.model_label if use_llm(settings) else None,
+            "generation_available": settings.engine != "rules" and has_llm_credentials(settings),
             "read_only": settings.write_token is not None,
             "allowed_hosts": list(settings.allowed_hosts),
         }
@@ -152,6 +155,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "stats": store.flaky_rate(set_id),
             "traceability": traceability(store, set_id),
         }
+
+    @app.get("/api/requirement-sets/{set_id}/matrix")
+    def run_matrix(set_id: str, limit: int = 24) -> dict[str, Any]:
+        if store.requirement_set(set_id) is None:
+            raise HTTPException(404, "No such requirement set")
+        return store.run_matrix(set_id, min(max(limit, 1), 100))
 
     @app.get("/api/batches")
     def list_batches(requirement_set_id: str | None = None, limit: int = 50) -> list[dict]:
@@ -206,6 +215,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             media_type="application/xml; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="uat-{set_id}.junit.xml"'},
         )
+
+    @app.get("/api/runs/{run_id}")
+    def get_run(run_id: str) -> dict[str, Any]:
+        run = store.get_run(run_id)
+        if run is None:
+            raise HTTPException(404, "No such run")
+        return run
 
     @app.put("/api/runs/{run_id}/triage")
     def human_triage(run_id: str, body: HumanTriageRequest, request: Request) -> dict[str, Any]:
@@ -264,9 +280,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/generate")
     def generate(body: GenerateRequest, request: Request) -> StreamingResponse:
         guard_write(request)
-        if settings.engine == "rules" or not has_claude_credentials():
+        if settings.engine == "rules" or not has_llm_credentials(settings):
             raise HTTPException(
-                503, "Generation needs Claude: set ANTHROPIC_API_KEY on the server."
+                503,
+                "Generation needs a model: set GEMINI_API_KEY (free), GROQ_API_KEY, "
+                "OPENROUTER_API_KEY or ANTHROPIC_API_KEY on the server.",
             )
         try:
             check_target(body.base_url, settings)
@@ -291,7 +309,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raw_text=body.requirements,
                 target_kind=body.target_kind.value,
                 base_url=body.base_url,
-                generated_by=f"claude:{settings.model}",
+                generated_by=settings.model_label,
                 drafts=gen.suite.test_cases,
                 coverage=gen.coverage,
             )

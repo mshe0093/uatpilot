@@ -48,16 +48,16 @@ export function GeneratePanel({ enabled, allowedHosts, token, onSaved }: {
   }
 
   return (
-    <div className="card">
-      <h2>Generate a suite from requirements</h2>
+    <div className="panel"><div className="panel-head"><h3>Write a suite from requirements</h3><span className="hint">The model reads the document and the live target, then writes executable test cases</span></div><div className="panel-body form">
+      
       {!enabled && (
-        <p className="muted small">
-          Generation calls Claude and is off on this server (no API key, or read-only mode).
-          Run it locally with <span className="mono">ANTHROPIC_API_KEY</span> set, or use{" "}
-          <span className="mono">uatpilot generate</span> from the CLI.
+        <p className="note">
+          Generation needs a model and is off on this server (no API key, or read-only mode).
+          A free Google Gemini key works: put <span className="mono">GEMINI_API_KEY=...</span> in{" "}
+          <span className="mono">.env</span> and restart <span className="mono">uatpilot serve</span>.
         </p>
       )}
-      <div className="grid gen-grid">
+      <div className="form-row">
         <label className="field">Document name
           <input value={name} onChange={(e) => setName(e.target.value)} disabled={!enabled} />
         </label>
@@ -76,12 +76,12 @@ export function GeneratePanel({ enabled, allowedHosts, token, onSaved }: {
           </select>
         </label>
       </div>
-      <label className="field" style={{ marginTop: 12 }}>Requirements (user stories + acceptance criteria)
+      <label className="field">Requirements (user stories and acceptance criteria)
         <textarea value={text} onChange={(e) => setText(e.target.value)} disabled={!enabled}
           placeholder="## US-1 ...&#10;- AC-1.1 ..." />
       </label>
       {kind === "api" && (
-        <div className="toolbar" style={{ marginTop: 12 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <label className="btn" style={{ opacity: enabled ? 1 : 0.5 }}>
             {spec ? "Replace OpenAPI spec" : "Add OpenAPI spec (optional)"}
             <input type="file" accept=".json,.yaml,.yml,application/json,text/yaml" hidden
@@ -98,14 +98,14 @@ export function GeneratePanel({ enabled, allowedHosts, token, onSaved }: {
           </span>
         </div>
       )}
-      <div className="toolbar" style={{ marginTop: 12 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button className="btn primary" disabled={!enabled || busy || text.length < 20} onClick={go}>
-          {busy ? "Agent working…" : "Generate test cases"}
+          {busy ? "Writing test cases" : "Write test cases"}
         </button>
         <span className="muted small">Allowed targets: {allowedHosts.join(", ")}</span>
       </div>
       {error && <p className="error small">{error}</p>}
       {events.length > 0 && <Trace events={events} />}
-    </div>
+    </div></div>
   );
 }

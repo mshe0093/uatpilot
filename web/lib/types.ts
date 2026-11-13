@@ -5,7 +5,8 @@ export type Change = "first_run" | "new_failure" | "fixed" | "still_failing" | "
 export interface Health {
   status: string;
   version: string;
-  claude_available: boolean;
+  llm_available: boolean;
+  model: string | null;
   generation_available: boolean;
   read_only: boolean;
   allowed_hosts: string[];
@@ -25,7 +26,8 @@ export interface Triage {
   label: TriageLabel;
   explanation: string;
   confidence: string;
-  engine: "claude" | "rules" | "reused" | "human";
+  engine: "llm" | "claude" | "rules" | "reused" | "human";
+  model?: string | null;
   floor_applied?: { from: string; reasons: string[] } | null;
   reused_from?: string | null;
 }
@@ -106,3 +108,14 @@ export type StreamEvent =
   | { type: "saved"; requirement_set_id: string; case_count: number }
   | { type: "warning"; message: string }
   | { type: "error"; message: string };
+
+export interface MatrixCell {
+  run_id: string;
+  status: Status;
+  label: TriageLabel | null;
+}
+
+export interface Matrix {
+  batches: { id: string; started_at: string; passed: number; total: number }[];
+  rows: { case_id: string; title: string; requirement_ref: string; cells: (MatrixCell | null)[] }[];
+}

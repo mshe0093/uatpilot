@@ -267,9 +267,10 @@ class Triage(BaseModel):
     label: TriageLabel
     explanation: str
     confidence: str
-    # claude/rules: decided now; reused: copied from an identical earlier failure of the same
-    # case (ReportPortal-style auto-analysis); human: a reviewer set it from the dashboard.
-    engine: Literal["claude", "rules", "reused", "human"]
+    # llm: decided by a model now ("claude" is the stored name from 0.1/0.2); rules: no model;
+    # reused: copied from an identical earlier failure; human: a reviewer set it.
+    engine: Literal["llm", "claude", "rules", "reused", "human"]
+    model: str | None = None  # provider:model that made an llm decision
     floor_applied: dict[str, Any] | None = None
     reused_from: str | None = None  # run id the decision was copied from
 

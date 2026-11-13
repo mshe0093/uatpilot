@@ -45,8 +45,8 @@ export function TrendChart({ batches }: { batches: Batch[] }) {
       <div className="legend" role="list">
         {present.map((s) => (
           <span key={s.key} role="listitem">
-            <span className="dot" style={{ background: OUTCOMES[s.outcome].color }} />
-            {OUTCOMES[s.outcome].icon} {OUTCOMES[s.outcome].label}
+            <i className="swatch" style={{ background: OUTCOMES[s.outcome].color }} />
+            {OUTCOMES[s.outcome].label}
           </span>
         ))}
       </div>
@@ -55,8 +55,8 @@ export function TrendChart({ batches }: { batches: Batch[] }) {
           {ticks.map((t) => (
             <g key={t}>
               <line x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)}
-                stroke={t === 0 ? "var(--axis)" : "var(--grid)"} strokeWidth={1} />
-              <text x={PAD.left - 6} y={y(t) + 4} textAnchor="end" fontSize={11} fill="var(--muted)">{t}</text>
+                stroke={t === 0 ? "var(--hairline-strong)" : "var(--hairline)"} strokeWidth={1} />
+              <text x={PAD.left - 6} y={y(t) + 4} textAnchor="end" fontSize={11} fill="var(--faint)">{t}</text>
             </g>
           ))}
           {rows.map((r, i) => {
@@ -79,7 +79,7 @@ export function TrendChart({ batches }: { batches: Batch[] }) {
                   );
                 })}
                 {(i === 0 || i === rows.length - 1 || rows.length <= 8) && (
-                  <text x={cx} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--muted)">
+                  <text x={cx} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--faint)">
                     #{i + 1}
                   </text>
                 )}
@@ -98,7 +98,7 @@ export function TrendChart({ batches }: { batches: Batch[] }) {
             <div className="muted">{new Date(rows[hover].started_at).toLocaleString()}</div>
             {SERIES.map((s) => (
               <div className="row" key={s.key}>
-                <span>{OUTCOMES[s.outcome].icon} {OUTCOMES[s.outcome].label}</span>
+                <span>{OUTCOMES[s.outcome].label}</span>
                 <span>{rows[hover][s.key]}</span>
               </div>
             ))}
