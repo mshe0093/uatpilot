@@ -108,3 +108,14 @@ export type StreamEvent =
   | { type: "saved"; requirement_set_id: string; case_count: number }
   | { type: "warning"; message: string }
   | { type: "error"; message: string };
+
+export interface MatrixCell {
+  run_id: string;
+  status: Status;
+  label: TriageLabel | null;
+}
+
+export interface Matrix {
+  batches: { id: string; started_at: string; passed: number; total: number }[];
+  rows: { case_id: string; title: string; requirement_ref: string; cells: (MatrixCell | null)[] }[];
+}

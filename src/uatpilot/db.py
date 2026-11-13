@@ -232,6 +232,54 @@ class Store:
                 ),
             )
 
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
+        row = self._conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["evidence"] = json.loads(d.pop("evidence_json"))
+        d["triage"] = json.loads(d.pop("triage_json")) if d.get("triage_json") else None
+        return d
+
+    def run_matrix(self, set_id: str, limit: int = 24) -> dict[str, Any]:
+        """Cases x the last `limit` batches (oldest first): the dashboard's run matrix."""
+        batches = list(reversed(self.batches(set_id, limit)))
+        ids = [b["id"] for b in batches]
+        cells: dict[tuple[str, str], dict[str, Any]] = {}
+        if ids:
+            marks = ",".join("?" * len(ids))
+            for r in self._conn.execute(
+                f"SELECT id, test_case_id, batch_id, status, triage_label FROM runs "  # noqa: S608
+                f"WHERE batch_id IN ({marks})",
+                ids,
+            ):
+                cells[(r["test_case_id"], r["batch_id"])] = {
+                    "run_id": r["id"],
+                    "status": r["status"],
+                    "label": r["triage_label"],
+                }
+        rows = [
+            {
+                "case_id": c.id,
+                "title": c.title,
+                "requirement_ref": c.requirement_ref,
+                "cells": [cells.get((c.id, b)) for b in ids],
+            }
+            for c in self.test_cases(set_id)
+        ]
+        return {
+            "batches": [
+                {
+                    "id": b["id"],
+                    "started_at": b["started_at"],
+                    "passed": b["passed"],
+                    "total": b["total"],
+                }
+                for b in batches
+            ],
+            "rows": rows,
+        }
+
     # ---- history, reuse and human review ---------------------------------------------------
     def case_history(self, case_id: str, limit: int = 10) -> list[str]:
         """Previous statuses of one case, newest first."""

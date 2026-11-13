@@ -250,6 +250,9 @@ def test_change_vs_previous_run(store, settings, monkeypatch):
         )
         changes.append(store.batch_runs(batch)[0]["change"])
     assert changes == ["first_run", "new_failure", "still_failing", "fixed"]
+    m = store.run_matrix(set_id, limit=3)  # the dashboard's run matrix: newest 3, oldest first
+    assert len(m["batches"]) == 3 and len(m["rows"]) == 1
+    assert [c["status"] for c in m["rows"][0]["cells"]] == ["fail", "fail", "pass"]
 
 
 # ---- 5. test_defect (Allure BROKEN / ReportPortal Automation Bug) ----------------------------------
@@ -379,6 +382,17 @@ def test_human_triage_endpoint(settings, monkeypatch):
         json={"label": "environment_issue", "explanation": "Sandbox was down for maintenance."},
     )
     assert r.status_code == 200 and r.json()["engine"] == "human"
+    one = c.get(f"/api/runs/{run_id}").json()
+    assert (
+        one["status"] == "fail"
+        and one["triage"]["engine"] == "human"
+        and "steps" in one["evidence"]
+    )
+    assert c.get("/api/runs/run_nope").status_code == 404
+    assert (
+        c.get(f"/api/requirement-sets/{set_id}/matrix").json()["rows"][0]["cells"][0]["run_id"]
+        == run_id
+    )
     assert (
         c.put(
             "/api/runs/run_nope/triage", json={"label": "flaky", "explanation": "whatever it is."}

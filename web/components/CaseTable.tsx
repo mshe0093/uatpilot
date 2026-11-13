@@ -1,35 +1,23 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { API_URL, putJSON } from "@/lib/api";
-import type { Run, TestCase, Triage, TriageLabel } from "@/lib/types";
+import type { Run, TestCase, TraceRow } from "@/lib/types";
 import { ChangeTag, StatusBadge, outcomeOf } from "./Status";
 
-const ENGINE: Record<Triage["engine"], string> = {
-  llm: "model",
-  claude: "Claude",
-  rules: "rules",
-  reused: "reused from an identical earlier failure",
-  human: "reviewer",
-};
-
-export function CaseTable({ cases, runs, token, canWrite, onReviewed }: {
+/** Every case with its latest result. A row opens the case sheet (click or Enter). */
+export function CaseTable({ cases, runs, onOpen }: {
   cases: TestCase[];
   runs: Record<string, Run>;
-  token: string;
-  canWrite: boolean;
-  onReviewed: (run: Run) => void;
+  onOpen: (caseId: string) => void;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
   return (
-    <table className="cases">
+    <table className="data">
       <thead>
         <tr>
-          <th style={{ width: 60 }}>ID</th>
-          <th style={{ width: 90 }}>Covers</th>
+          <th style={{ width: 70 }}>ID</th>
           <th>Test case</th>
-          <th style={{ width: 70 }}>Priority</th>
-          <th style={{ width: 200 }}>Latest result</th>
+          <th style={{ width: 110 }}>Covers</th>
+          <th style={{ width: 80 }}>Priority</th>
+          <th style={{ width: 220 }}>Latest result</th>
         </tr>
       </thead>
       <tbody>
@@ -38,24 +26,19 @@ export function CaseTable({ cases, runs, token, canWrite, onReviewed }: {
           const outcome = run
             ? outcomeOf(run.status, run.triage?.label)
             : outcomeOf(c.latest_run?.status, c.latest_run?.triage_label);
-          const isOpen = open === c.id;
           return (
-            <Fragment key={c.id}>
-              <tr className="row" onClick={() => setOpen(isOpen ? null : c.id)} aria-expanded={isOpen}>
-                <td className="mono">{c.id.split("-").pop()}</td>
-                <td className="small">{c.requirement_ref}</td>
-                <td>{c.title}</td>
-                <td className="small">{c.priority}</td>
-                <td><StatusBadge outcome={outcome} /><ChangeTag change={run?.change} /></td>
-              </tr>
-              {isOpen && (
-                <tr>
-                  <td colSpan={5}>
-                    <CaseDetail c={c} run={run} token={token} canWrite={canWrite} onReviewed={onReviewed} />
-                  </td>
-                </tr>
-              )}
-            </Fragment>
+            <tr key={c.id} className="clickable" tabIndex={0} onClick={() => onOpen(c.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(c.id); }
+              }}>
+              <td className="mono muted">{c.id.split("-").pop()}</td>
+              <td>{c.title}</td>
+              <td className="mono">{c.requirement_ref}</td>
+              <td className="muted">{c.priority}</td>
+              <td><span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                <StatusBadge outcome={outcome} /><ChangeTag change={run?.change} />
+              </span></td>
+            </tr>
           );
         })}
       </tbody>
@@ -63,96 +46,39 @@ export function CaseTable({ cases, runs, token, canWrite, onReviewed }: {
   );
 }
 
-function CaseDetail({ c, run, token, canWrite, onReviewed }: {
-  c: TestCase;
-  run?: Run;
-  token: string;
-  canWrite: boolean;
-  onReviewed: (run: Run) => void;
+/** One row per acceptance criterion in the requirements document. */
+export function TraceTable({ rows, onOpenCase, caseIdFor }: {
+  rows: TraceRow[];
+  onOpenCase: (caseId: string) => void;
+  caseIdFor: (shortId: string) => string | undefined;
 }) {
-  const shot = run?.evidence?.screenshot as string | undefined;
+  const verdict = (r: string) =>
+    r === "PASS" ? <StatusBadge outcome="pass" /> :
+    r.startsWith("FAIL") ? <StatusBadge outcome="real_regression" /> :
+    r === "MISSING" ? <span className="badge real_regression">No test case</span> :
+    r.startsWith("NOT COVERED") ? <span className="muted">Not testable: {r.replace("NOT COVERED: ", "")}</span> :
+    <StatusBadge outcome="not_run" />;
   return (
-    <div className="detail">
-      {c.preconditions.length > 0 && (
-        <>
-          <strong className="small">Preconditions</strong>
-          <ul className="small">{c.preconditions.map((p, i) => <li key={i}>{p}</li>)}</ul>
-        </>
-      )}
-      <strong className="small">Steps</strong>
-      <ol className="small">{c.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
-      <div className="small"><strong>Expected:</strong> {c.expected_result}</div>
-      {run?.triage && (
-        <p className="small">
-          <strong>Triage ({run.triage.model ?? ENGINE[run.triage.engine]}, {run.triage.confidence} confidence):</strong>{" "}
-          {run.triage.explanation}
-          {run.triage.floor_applied && (
-            <span className="muted"> · Floor applied: “{run.triage.floor_applied.from}” was claimed,
-              but {run.triage.floor_applied.reasons.join("; ")}.</span>
-          )}
-        </p>
-      )}
-      {run?.status === "fail" && canWrite && <Review run={run} token={token} onReviewed={onReviewed} />}
-      {shot && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={`${API_URL}/api/artifacts/${shot}`} alt="Screenshot at the failing step"
-          style={{ maxWidth: "100%", borderRadius: 8, border: "1px solid var(--border)" }} />
-      )}
-      <details>
-        <summary className="small">Executable check ({c.executable.kind.toUpperCase()})</summary>
-        <pre className="evidence mono">{JSON.stringify(c.executable, null, 2)}</pre>
-      </details>
-      {run && (
-        <details open={run.status === "fail"}>
-          <summary className="small">Evidence from the latest run ({run.duration_ms} ms)</summary>
-          <pre className="evidence mono">{JSON.stringify(run.evidence, null, 2)}</pre>
-        </details>
-      )}
-      {!run && <p className="muted small">Run the suite (or open a past run) to see evidence.</p>}
-    </div>
-  );
-}
-
-const LABELS: { value: TriageLabel; text: string }[] = [
-  { value: "real_regression", text: "Regression" },
-  { value: "flaky", text: "Flaky" },
-  { value: "environment_issue", text: "Environment" },
-  { value: "test_defect", text: "Test defect" },
-];
-
-/** A reviewer's decision. It relabels the failure (never the pass/fail status) and is reused
- *  for later identical failures of this case before the model is asked. */
-function Review({ run, token, onReviewed }: { run: Run; token: string; onReviewed: (run: Run) => void }) {
-  const [label, setLabel] = useState<TriageLabel>(run.triage?.label ?? "real_regression");
-  const [text, setText] = useState(run.triage?.engine === "human" ? run.triage.explanation : "");
-  const [state, setState] = useState<"idle" | "saving" | "saved" | string>("idle");
-
-  async function save() {
-    setState("saving");
-    try {
-      const triage = await putJSON<Triage>(`/api/runs/${run.id}/triage`, { label, explanation: text }, token);
-      onReviewed({ ...run, triage });
-      setState("saved");
-    } catch (e) {
-      setState((e as Error).message);
-    }
-  }
-
-  return (
-    <div onClick={(e) => e.stopPropagation()}>
-      <strong className="small">Reviewer decision</strong>
-      <div className="review">
-        <select value={label} onChange={(e) => setLabel(e.target.value as TriageLabel)} aria-label="Triage label">
-          {LABELS.map((l) => <option key={l.value} value={l.value}>{l.text}</option>)}
-        </select>
-        <input value={text} onChange={(e) => setText(e.target.value)} aria-label="Reason"
-          placeholder="Why (shown in the sign-off document)" />
-        <button className="btn" disabled={text.trim().length < 10 || state === "saving"} onClick={save}>
-          {state === "saving" ? "Saving…" : "Save"}
-        </button>
-      </div>
-      {state === "saved" && <p className="small muted">Saved. Identical failures of this case will reuse it.</p>}
-      {!["idle", "saving", "saved"].includes(state) && <p className="small error">{state}</p>}
-    </div>
+    <table className="data">
+      <thead>
+        <tr><th style={{ width: 120 }}>Criterion</th><th>Test cases</th><th style={{ width: 260 }}>Result</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((t) => (
+          <tr key={t.criterion}>
+            <td className="mono">{t.criterion}</td>
+            <td>
+              {t.cases.length === 0 ? <span className="muted">None</span> : t.cases.map((id) => {
+                const full = caseIdFor(id);
+                return full
+                  ? <button key={id} className="btn ghost mono" style={{ height: 26, padding: "0 6px" }} onClick={() => onOpenCase(full)}>{id}</button>
+                  : <span key={id} className="mono">{id}</span>;
+              })}
+            </td>
+            <td>{verdict(t.result)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

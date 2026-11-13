@@ -156,6 +156,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "traceability": traceability(store, set_id),
         }
 
+    @app.get("/api/requirement-sets/{set_id}/matrix")
+    def run_matrix(set_id: str, limit: int = 24) -> dict[str, Any]:
+        if store.requirement_set(set_id) is None:
+            raise HTTPException(404, "No such requirement set")
+        return store.run_matrix(set_id, min(max(limit, 1), 100))
+
     @app.get("/api/batches")
     def list_batches(requirement_set_id: str | None = None, limit: int = 50) -> list[dict]:
         return list(reversed(store.batches(requirement_set_id, min(limit, 200))))
@@ -209,6 +215,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             media_type="application/xml; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="uat-{set_id}.junit.xml"'},
         )
+
+    @app.get("/api/runs/{run_id}")
+    def get_run(run_id: str) -> dict[str, Any]:
+        run = store.get_run(run_id)
+        if run is None:
+            raise HTTPException(404, "No such run")
+        return run
 
     @app.put("/api/runs/{run_id}/triage")
     def human_triage(run_id: str, body: HumanTriageRequest, request: Request) -> dict[str, Any]:

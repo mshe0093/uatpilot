@@ -1,16 +1,16 @@
+import { CircleCheck, CircleDashed, CircleX, CloudOff, Shuffle, Wrench, type LucideIcon } from "lucide-react";
 import type { Status, TriageLabel } from "@/lib/types";
 
-// Status colours are reserved for state and always ship with an icon + text label.
+// Status colours are reserved for state and always ship with an icon and a word.
 export const OUTCOMES = {
-  pass: { label: "Passed", color: "var(--good)", icon: "✓" },
-  real_regression: { label: "Regression", color: "var(--critical)", icon: "✕" },
-  flaky: { label: "Flaky", color: "var(--warning)", icon: "~" },
-  environment_issue: { label: "Environment", color: "var(--serious)", icon: "!" },
-  // Not one of the four reserved status hues: a broken test says nothing about the product.
-  test_defect: { label: "Test defect", color: "var(--neutral)", icon: "⚙" },
-  untriaged: { label: "Failed", color: "var(--critical)", icon: "✕" },
-  not_run: { label: "Not run", color: "var(--axis)", icon: "–" },
-} as const;
+  pass: { label: "Passed", color: "var(--pass)", Icon: CircleCheck },
+  real_regression: { label: "Regression", color: "var(--regression)", Icon: CircleX },
+  flaky: { label: "Flaky", color: "var(--flaky)", Icon: Shuffle },
+  environment_issue: { label: "Environment", color: "var(--environment)", Icon: CloudOff },
+  test_defect: { label: "Test defect", color: "var(--test-defect)", Icon: Wrench },
+  untriaged: { label: "Failed", color: "var(--regression)", Icon: CircleX },
+  not_run: { label: "Not run", color: "var(--empty)", Icon: CircleDashed },
+} satisfies Record<string, { label: string; color: string; Icon: LucideIcon }>;
 
 export type Outcome = keyof typeof OUTCOMES;
 
@@ -20,25 +20,24 @@ export function outcomeOf(status: Status | null | undefined, triage: TriageLabel
   return triage ?? "untriaged";
 }
 
+export function StatusBadge({ outcome }: { outcome: Outcome }) {
+  const { label, Icon } = OUTCOMES[outcome];
+  return (
+    <span className={`badge ${outcome}`}>
+      <Icon size={15} strokeWidth={2.2} aria-hidden />
+      {label}
+    </span>
+  );
+}
+
 const CHANGES: Record<string, string> = {
   new_failure: "New failure",
   fixed: "Fixed",
   still_failing: "Still failing",
 };
 
-/** Allure-style change against the previous run; only the interesting ones are shown. */
+/** Allure-style change against the previous run; only the ones worth reading are shown. */
 export function ChangeTag({ change }: { change?: string }) {
   if (!change || !(change in CHANGES)) return null;
   return <span className={`change change-${change}`}>{CHANGES[change]}</span>;
-}
-
-export function StatusBadge({ outcome }: { outcome: Outcome }) {
-  const o = OUTCOMES[outcome];
-  return (
-    <span className="badge">
-      <span className="dot" style={{ background: o.color }} aria-hidden />
-      <span aria-hidden>{o.icon}</span>
-      {outcome === "pass" || outcome === "not_run" ? o.label : `Fail · ${o.label}`}
-    </span>
-  );
 }

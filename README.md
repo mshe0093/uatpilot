@@ -8,8 +8,7 @@ structured UAT test cases, runs them, and reports pass/fail up the chain, by han
 spreadsheet, every release. UATPilot automates that loop and keeps a human in charge of the
 decisions.
 
-![UATPilot dashboard: pass/fail trend per run, test cases with their latest result, and an
-expanded failure showing its triage, a reviewer decision box and the raw evidence](docs/assets/dashboard.png)
+![UATPilot dashboard: a verdict line saying the release is not ready to sign off, and the run matrix with one row per test case and one column per run, where red tails mark regressions](docs/assets/dashboard-light.png)
 
 1. **Generate.** A Claude tool-use agent reads the requirements doc (and the target's OpenAPI spec,
    if there is one), *looks at the real target first* (read-only `http_probe` for APIs,
@@ -48,6 +47,28 @@ can change the status. The label is also clamped to what the evidence supports
 | anything else | becomes `real_regression`, with `floor_applied` recording what was claimed |
 
 The same rules run without the model when no API key is set, so the tool works offline.
+
+## The dashboard
+
+The dashboard answers one question first: **can this release be signed off?** Each suite opens
+with a verdict ("Not ready to sign off. 7 of 17 acceptance criteria are failing.") and then the
+**run matrix**: one row per test case, one column per run, newest on the right. A red tail on a
+row is a regression, a row that flickers is flaky, a row turning green is a fix. During a run the
+newest column fills in as results stream from the runner.
+
+Selecting a cell opens the case in a side sheet with its history, why it failed (and who or what
+decided that), the reviewer's label control, the steps, the expected result and the raw
+evidence. **Ctrl/Cmd-K** opens a command menu to jump to any suite, case or requirement ID, or to
+run and export. Light and dark themes, keyboard navigation in the matrix, deep links (`?set=…&case=…`),
+and a phone layout.
+
+| | |
+|---|---|
+| ![Case sheet with history, triage, a reviewer label control and evidence](docs/assets/case-sheet.png) | ![The dashboard in dark mode](docs/assets/dashboard-dark.png) |
+
+The design was planned from a review of the most-starred guidance for AI-built interfaces
+(Anthropic's frontend-design skill, UI/UX Pro Max, awesome-design-md, shadcn/ui and the top
+shadcn dashboard templates): see [`docs/UI-NOTES.md`](docs/UI-NOTES.md).
 
 ## Targets
 
@@ -96,7 +117,7 @@ uatpilot list
 uatpilot run <requirement-set-id>                      # real runs against the sandbox
 uatpilot export <requirement-set-id> --out signoff.md  # sign-off doc (also --format csv|junit)
 
-# with ANTHROPIC_API_KEY set: have the agent write a suite from a requirements doc
+# with a model key in .env (free: GEMINI_API_KEY, see below): write a suite from a requirements doc
 uatpilot generate examples/requirements/restful-booker.md \
   --base-url https://restful-booker.herokuapp.com --kind api --run
 uatpilot generate examples/requirements/saucedemo.md \
@@ -105,6 +126,21 @@ uatpilot generate requirements.md --base-url <url> --openapi openapi.yaml   # sc
 
 uatpilot eval <api-requirement-set-id>                 # injected-bug detection + triage accuracy
 ```
+
+**Running the agents for free.** The agents work with Claude or with any OpenAI-compatible API
+that supports function calling. Copy `.env.example` to `.env` (git-ignored) and set one key; the
+provider is picked from whichever key is present:
+
+| Provider | Key | Default model | Cost |
+|---|---|---|---|
+| Google Gemini | `GEMINI_API_KEY` ([get one](https://aistudio.google.com/apikey)) | `gemini-2.5-flash` | free tier |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | free tier |
+| OpenRouter | `OPENROUTER_API_KEY` | a `:free` Llama model | free tier |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-opus-5-5` | paid |
+
+Free tiers are rate limited, and Google may use free-tier prompts to improve its models, so only
+point it at sandbox data. Every model's output still goes through the same strict schema and the
+same triage floor.
 
 Dashboard: `uatpilot serve` (API on :8000) and `cd web && npm install && npm run dev` (:3000).
 Docker: `docker build -t uatpilot . && docker run -p 8000:8000 uatpilot` serves both on :8000.
@@ -157,9 +193,9 @@ requirements.md (+ openapi) ─▶ generation agent ─schema + coverage gate─
 | `src/uatpilot/evals/` | Fault-injection proxy, bug catalogue, eval harness |
 | `web/` | Next.js dashboard |
 
-Stack: Python 3.11+, FastAPI, Pydantic, Anthropic SDK (`claude-opus-5-5`, adaptive thinking,
-server-side refusal fallback), httpx, jsonschema, Playwright, SQLite, Next.js 16, Docker, GitHub
-Actions.
+Stack: Python 3.11+, FastAPI, Pydantic, the Anthropic SDK (`claude-opus-5-5`, adaptive thinking,
+server-side refusal fallback) or any OpenAI-compatible API (Gemini, Groq, OpenRouter), httpx,
+jsonschema, Playwright, SQLite, Next.js 16 with Radix, cmdk and Lucide, Docker, GitHub Actions.
 
 ## Design notes
 
@@ -178,7 +214,7 @@ The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices
 
 ## Tests
 
-`pytest` runs 79 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
+`pytest` runs 88 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
 booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1. No
 network and no API key needed.
 

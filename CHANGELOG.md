@@ -3,7 +3,21 @@
 All notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-14
+
+### Added
+- Free model providers: Google Gemini, Groq and OpenRouter through one OpenAI-compatible backend,
+  picked from whichever key is set; optional local `.env`. Claude stays supported.
+- Dashboard redesign (plan in `docs/UI-NOTES.md`): a sign-off verdict, the run matrix (cases x
+  runs, filling live during a run), a case side sheet with history, Ctrl/Cmd-K command menu,
+  deep links, theme switch, SVG icons, IBM Plex type.
+- API: `GET /api/requirement-sets/{id}/matrix`, `GET /api/runs/{id}`.
+
+### Changed
+- Triage engine `claude` is now `llm`, with the model recorded on each decision (`claude` is still
+  read for stored runs).
+
+## [0.2.1] - 2026-11-14
 
 ### Added
 - Dashboard: attach an OpenAPI spec (JSON/YAML) in the Generate panel; it's read in the browser
