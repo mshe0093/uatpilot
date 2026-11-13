@@ -13,9 +13,27 @@ from uatpilot.db import Store
 BASE = "https://restful-booker.herokuapp.com"
 
 
+@pytest.fixture(autouse=True)
+def _isolated_env(monkeypatch):
+    """Tests never read a developer's .env or real API keys."""
+    monkeypatch.setenv("UATPILOT_NO_DOTENV", "1")
+    for name in (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
+        "UATPILOT_PROVIDER",
+        "UATPILOT_MODEL",
+        "UATPILOT_LLM_BASE_URL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def settings(tmp_path) -> Settings:
     return Settings(
+        provider="anthropic",
         db_path=tmp_path / "t.db",
         artifacts_dir=tmp_path / "artifacts",
         min_request_interval=0.0,

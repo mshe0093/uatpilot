@@ -42,7 +42,7 @@ def test_cli_reports_unreadable_spec(tmp_path, settings):
 
 
 def test_api_rejects_bad_spec_before_calling_the_model(tmp_path, monkeypatch):
-    monkeypatch.setattr(api_module, "has_claude_credentials", lambda: True)
+    monkeypatch.setattr(api_module, "has_llm_credentials", lambda s=None: True)
     app = create_app(Settings(db_path=tmp_path / "t.db", engine="auto"))
     r = TestClient(app).post(
         "/api/generate",

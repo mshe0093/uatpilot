@@ -138,7 +138,7 @@ def test_agent_label_is_clamped_by_floor(settings):
     )
     events = list(triage_or_fallback(agent, CASE, {"steps": [step(404)]}, {"passed": False}))
     t = events[-1]["triage"]
-    assert t.label is TriageLabel.REAL_REGRESSION and t.engine == "claude"
+    assert t.label is TriageLabel.REAL_REGRESSION and t.engine == "llm"
     assert t.floor_applied["reasons"]
     # the request carried the evidence and the code's own environment verdict
     sent = client.requests[0]["messages"][0]["content"]

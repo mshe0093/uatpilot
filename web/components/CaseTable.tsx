@@ -6,6 +6,7 @@ import type { Run, TestCase, Triage, TriageLabel } from "@/lib/types";
 import { ChangeTag, StatusBadge, outcomeOf } from "./Status";
 
 const ENGINE: Record<Triage["engine"], string> = {
+  llm: "model",
   claude: "Claude",
   rules: "rules",
   reused: "reused from an identical earlier failure",
@@ -83,7 +84,7 @@ function CaseDetail({ c, run, token, canWrite, onReviewed }: {
       <div className="small"><strong>Expected:</strong> {c.expected_result}</div>
       {run?.triage && (
         <p className="small">
-          <strong>Triage ({ENGINE[run.triage.engine]}, {run.triage.confidence} confidence):</strong>{" "}
+          <strong>Triage ({run.triage.model ?? ENGINE[run.triage.engine]}, {run.triage.confidence} confidence):</strong>{" "}
           {run.triage.explanation}
           {run.triage.floor_applied && (
             <span className="muted"> · Floor applied: “{run.triage.floor_applied.from}” was claimed,

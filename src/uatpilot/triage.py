@@ -21,7 +21,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-import anthropic
 from pydantic import ValidationError
 
 from uatpilot.config import Settings, get_settings
@@ -241,12 +240,12 @@ class TriageAgent:
         self,
         *,
         base_url: str,
-        client: anthropic.Anthropic | None = None,
+        client: Any = None,  # injected SDK client (tests); built from settings otherwise
         settings: Settings | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.base_url = base_url
-        self.client = client or anthropic.Anthropic()
+        self.client = client
         self._health_checked = False
 
     def _health(self, _args: dict[str, Any]) -> ToolOutcome:
@@ -314,7 +313,9 @@ class TriageAgent:
         yield from loop.run(
             "<failure_report>\n" + json.dumps(payload, default=str)[:60000] + "\n</failure_report>"
         )
-        yield {"type": "triage", "triage": apply_triage_floor(loop.result, signals, "claude")}
+        triage = apply_triage_floor(loop.result, signals, "llm")
+        triage.model = loop.backend.label
+        yield {"type": "triage", "triage": triage}
 
 
 def build_signals(

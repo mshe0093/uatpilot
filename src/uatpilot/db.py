@@ -254,7 +254,7 @@ class Store:
         candidates = []
         for r in rows:
             t = json.loads(r["triage_json"])
-            if t.get("engine") in ("human", "claude") and not t.get("floor_applied"):
+            if t.get("engine") in ("human", "llm", "claude") and not t.get("floor_applied"):
                 candidates.append({**t, "run_id": r["id"]})
         humans = [c for c in candidates if c["engine"] == "human"]
         return (humans or candidates or [None])[0]

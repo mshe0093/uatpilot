@@ -52,9 +52,9 @@ export function GeneratePanel({ enabled, allowedHosts, token, onSaved }: {
       <h2>Generate a suite from requirements</h2>
       {!enabled && (
         <p className="muted small">
-          Generation calls Claude and is off on this server (no API key, or read-only mode).
-          Run it locally with <span className="mono">ANTHROPIC_API_KEY</span> set, or use{" "}
-          <span className="mono">uatpilot generate</span> from the CLI.
+          Generation needs a model and is off on this server (no API key, or read-only mode).
+          A free Google Gemini key works: put <span className="mono">GEMINI_API_KEY=...</span> in{" "}
+          <span className="mono">.env</span> and restart <span className="mono">uatpilot serve</span>.
         </p>
       )}
       <div className="grid gen-grid">

@@ -91,7 +91,7 @@ export default function Dashboard() {
         <div className="toolbar" style={{ alignItems: "flex-start" }}>
           {health && (
             <>
-              <span className="pill">Triage: {health.claude_available ? "Claude" : "rules (no API key)"}</span>
+              <span className="pill">Model: {health.model ?? "none (rules triage)"}</span>
               {health.read_only && <span className="pill">Read-only demo</span>}
               <span className="pill">v{health.version}</span>
             </>
@@ -137,7 +137,7 @@ export default function Dashboard() {
                 <li key={s.id}>
                   <button aria-pressed={selected === s.id} onClick={() => setSelected(s.id)}>
                     <span className="name">{s.source_name}</span>
-                    <span className="meta">{s.target_kind.toUpperCase()} · {s.case_count} cases · {s.generated_by.split(":")[0] === "claude" ? "written by Claude" : "hand-written fixture"}</span>
+                    <span className="meta">{s.target_kind.toUpperCase()} · {s.case_count} cases · {s.generated_by.startsWith("import:") ? "hand-written fixture" : `written by ${s.generated_by.split(":").slice(1).join(":")}`}</span>
                   </button>
                 </li>
               ))}

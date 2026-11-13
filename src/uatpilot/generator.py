@@ -6,7 +6,6 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
-import anthropic
 from pydantic import ValidationError
 
 from uatpilot.config import Settings, get_settings
@@ -37,18 +36,17 @@ class Generator:
         *,
         base_url: str,
         target_kind: TargetKind,
-        client: anthropic.Anthropic | None = None,
+        client: Any = None,  # injected SDK client (tests); built from settings otherwise
         settings: Settings | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.base_url = base_url
         self.target_kind = target_kind
-        self.client = client or anthropic.Anthropic()
         self.probes = 0
         self.criteria: list[str] = []
         self.coverage: dict[str, Any] | None = None
         self.loop = ToolLoop(
-            client=self.client,
+            client=client,
             settings=self.settings,
             system=GENERATION_SYSTEM,
             tools=self._tools(),
