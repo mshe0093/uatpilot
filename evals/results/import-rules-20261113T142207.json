@@ -1,0 +1,429 @@
+{
+  "generated_at": "2026-11-13T14:22:07+00:00",
+  "requirement_set": {
+    "id": "rs_8383918fdbb8",
+    "source_name": "restful-booker.md",
+    "base_url": "https://restful-booker.herokuapp.com",
+    "generated_by": "import:restful-booker.seed.json"
+  },
+  "triage_engine": "rules",
+  "model": null,
+  "baseline": {
+    "cases": 16,
+    "stable_pass": 10,
+    "failing_on_sandbox": [
+      "rs_8383918fdbb8-TC004",
+      "rs_8383918fdbb8-TC005",
+      "rs_8383918fdbb8-TC006",
+      "rs_8383918fdbb8-TC011",
+      "rs_8383918fdbb8-TC013",
+      "rs_8383918fdbb8-TC015"
+    ],
+    "unstable": []
+  },
+  "detection": {
+    "mutations": 20,
+    "measurable": 18,
+    "detected": 18,
+    "masked": 2,
+    "rate": 1.0,
+    "rows": [
+      {
+        "mutation": "ping_500",
+        "breaks": "AC-1.1",
+        "description": "Health endpoint returns 500.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC001"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC001"
+        ]
+      },
+      {
+        "mutation": "create_drops_bookingid",
+        "breaks": "AC-2.1",
+        "description": "Create response omits bookingid.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC002",
+          "rs_8383918fdbb8-TC003",
+          "rs_8383918fdbb8-TC008",
+          "rs_8383918fdbb8-TC014",
+          "rs_8383918fdbb8-TC016"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC002"
+        ]
+      },
+      {
+        "mutation": "create_echo_wrong_lastname",
+        "breaks": "AC-2.1",
+        "description": "Create response echoes the last name in upper case.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC002"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC002"
+        ]
+      },
+      {
+        "mutation": "create_price_off_by_one",
+        "breaks": "AC-2.1",
+        "description": "Create response echoes totalprice + 1.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC002"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC002"
+        ]
+      },
+      {
+        "mutation": "create_depositpaid_flipped",
+        "breaks": "AC-2.1",
+        "description": "Create response flips depositpaid.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC002"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC002"
+        ]
+      },
+      {
+        "mutation": "create_drops_additionalneeds",
+        "breaks": "AC-2.1",
+        "description": "Create response drops additionalneeds.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC002"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC002"
+        ]
+      },
+      {
+        "mutation": "get_wrong_firstname",
+        "breaks": "AC-2.2",
+        "description": "GET /booking/{id} returns the first name reversed.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC003"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC003"
+        ]
+      },
+      {
+        "mutation": "get_wrong_price",
+        "breaks": "AC-2.2",
+        "description": "GET /booking/{id} returns totalprice doubled.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC003"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC003"
+        ]
+      },
+      {
+        "mutation": "get_drops_checkout",
+        "breaks": "AC-2.2",
+        "description": "GET /booking/{id} omits bookingdates.checkout.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC003"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC003"
+        ]
+      },
+      {
+        "mutation": "new_booking_not_found",
+        "breaks": "AC-2.2",
+        "description": "Freshly created bookings 404 on GET.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC003",
+          "rs_8383918fdbb8-TC016"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC003"
+        ]
+      },
+      {
+        "mutation": "list_returns_object",
+        "breaks": "AC-3.1",
+        "description": "GET /booking returns an object instead of an array.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC007"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC007"
+        ]
+      },
+      {
+        "mutation": "filter_ignored_empty",
+        "breaks": "AC-3.2",
+        "description": "Name filter always returns an empty list.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC008"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC008"
+        ]
+      },
+      {
+        "mutation": "missing_booking_200",
+        "breaks": "AC-3.3",
+        "description": "Unknown booking ids return 200 {} instead of 404.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC009"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC009"
+        ]
+      },
+      {
+        "mutation": "auth_no_token",
+        "breaks": "AC-4.1",
+        "description": "Valid credentials no longer return a token.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC010",
+          "rs_8383918fdbb8-TC014"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC010"
+        ]
+      },
+      {
+        "mutation": "put_without_token_allowed",
+        "breaks": "AC-4.3",
+        "description": "PUT without a token succeeds (200).",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC012"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC012"
+        ]
+      },
+      {
+        "mutation": "delete_without_token_allowed",
+        "breaks": "AC-4.3",
+        "description": "DELETE without a token succeeds (201).",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC012"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC012"
+        ]
+      },
+      {
+        "mutation": "put_ignores_update",
+        "breaks": "AC-5.1",
+        "description": "PUT responds 200 but echoes the old first name.",
+        "status": "masked",
+        "caught_by": [],
+        "covering_stable_cases": []
+      },
+      {
+        "mutation": "patch_clobbers_lastname",
+        "breaks": "AC-5.2",
+        "description": "PATCH wipes the last name.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC014"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC014"
+        ]
+      },
+      {
+        "mutation": "delete_is_noop",
+        "breaks": "AC-6.2",
+        "description": "DELETE reports success but the booking still exists.",
+        "status": "masked",
+        "caught_by": [],
+        "covering_stable_cases": []
+      },
+      {
+        "mutation": "slow_reads",
+        "breaks": "NFR-1",
+        "description": "Single-booking reads take 3.5 s.",
+        "status": "detected",
+        "caught_by": [
+          "rs_8383918fdbb8-TC016"
+        ],
+        "covering_stable_cases": [
+          "rs_8383918fdbb8-TC016"
+        ]
+      }
+    ]
+  },
+  "triage": {
+    "failures": 15,
+    "correct": 15,
+    "accuracy": 1.0,
+    "never_flipped_to_pass": true,
+    "rows": [
+      {
+        "scenario": "flaky_once",
+        "case": "rs_8383918fdbb8-TC001",
+        "expected": "flaky",
+        "got": "flaky",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "flaky_once",
+        "case": "rs_8383918fdbb8-TC002",
+        "expected": "flaky",
+        "got": "flaky",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "flaky_once",
+        "case": "rs_8383918fdbb8-TC003",
+        "expected": "flaky",
+        "got": "flaky",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_503",
+        "case": "rs_8383918fdbb8-TC001",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_503",
+        "case": "rs_8383918fdbb8-TC002",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_503",
+        "case": "rs_8383918fdbb8-TC003",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_timeout",
+        "case": "rs_8383918fdbb8-TC001",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_timeout",
+        "case": "rs_8383918fdbb8-TC002",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_timeout",
+        "case": "rs_8383918fdbb8-TC003",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_429",
+        "case": "rs_8383918fdbb8-TC001",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_429",
+        "case": "rs_8383918fdbb8-TC002",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "env_429",
+        "case": "rs_8383918fdbb8-TC003",
+        "expected": "environment_issue",
+        "got": "environment_issue",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "real_wrong_status",
+        "case": "rs_8383918fdbb8-TC001",
+        "expected": "real_regression",
+        "got": "real_regression",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "real_wrong_status",
+        "case": "rs_8383918fdbb8-TC002",
+        "expected": "real_regression",
+        "got": "real_regression",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      },
+      {
+        "scenario": "real_wrong_status",
+        "case": "rs_8383918fdbb8-TC003",
+        "expected": "real_regression",
+        "got": "real_regression",
+        "correct": true,
+        "status": "fail",
+        "engine": "rules",
+        "floor_applied": false
+      }
+    ]
+  }
+}

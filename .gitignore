@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+node_modules/
+.next/
+web/next-env.d.ts
+web/*.tsbuildinfo
+web/out/
+# local database, screenshots and scratch eval output
+data/

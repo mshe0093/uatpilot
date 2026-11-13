@@ -1,0 +1,225 @@
+"""Command-line interface.
+
+uatpilot generate examples/requirements/restful-booker.md --base-url https://restful-booker.herokuapp.com
+uatpilot import examples/suites/restful-booker.seed.json
+uatpilot run <requirement-set-id>
+uatpilot export <requirement-set-id> --format md
+uatpilot serve
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Annotated
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from uatpilot.config import get_settings, has_claude_credentials
+from uatpilot.db import Store
+from uatpilot.export import to_csv, to_markdown
+from uatpilot.llm import AgentError
+from uatpilot.models import TargetKind, TestSuite
+from uatpilot.pipeline import run_suite
+from uatpilot.target import TargetNotAllowed, check_target
+
+app = typer.Typer(add_completion=False, help="UAT test cases from requirements, run for real.")
+console = Console()
+
+
+def _store() -> Store:
+    return Store(get_settings().db_path)
+
+
+@app.command()
+def generate(
+    requirements: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    base_url: Annotated[str, typer.Option(help="Target base URL (must be allowlisted).")],
+    kind: Annotated[TargetKind, typer.Option(help="api or ui")] = TargetKind.API,
+    run: Annotated[bool, typer.Option(help="Run the suite right after generating it.")] = False,
+) -> None:
+    """Have the Claude agent write a UAT suite for a requirements doc."""
+    from uatpilot.generator import Generator
+
+    settings = get_settings()
+    try:
+        check_target(base_url, settings)
+    except TargetNotAllowed as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if not has_claude_credentials():
+        console.print("[red]Generation needs Claude: set ANTHROPIC_API_KEY.[/red]")
+        raise typer.Exit(2)
+    gen = Generator(base_url=base_url, target_kind=kind, settings=settings)
+    try:
+        for ev in gen.generate(requirements.read_text(encoding="utf-8"), requirements.name):
+            _print_event(ev)
+    except AgentError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    assert gen.suite is not None
+    store = _store()
+    set_id = store.save_suite(
+        source_name=requirements.name,
+        raw_text=requirements.read_text(encoding="utf-8"),
+        target_kind=kind.value,
+        base_url=base_url,
+        generated_by=f"claude:{settings.model}",
+        drafts=gen.suite.test_cases,
+    )
+    console.print(f"[green]Saved {len(gen.suite.test_cases)} test cases as {set_id}[/green]")
+    if run:
+        _run(store, set_id)
+
+
+@app.command("import")
+def import_suite(path: Annotated[Path, typer.Argument(exists=True, readable=True)]) -> None:
+    """Import a hand-written suite JSON (see examples/suites). No model call."""
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    suite = TestSuite.model_validate({"test_cases": doc["test_cases"]})
+    req_path = path.parent / doc["requirements"]
+    store = _store()
+    set_id = store.save_suite(
+        source_name=req_path.name,
+        raw_text=req_path.read_text(encoding="utf-8"),
+        target_kind=doc["target_kind"],
+        base_url=doc["base_url"],
+        generated_by=f"import:{path.name}",
+        drafts=suite.test_cases,
+    )
+    console.print(f"Imported {len(suite.test_cases)} test cases as [bold]{set_id}[/bold]")
+
+
+@app.command()
+def seed(
+    directory: Annotated[Path, typer.Option("--dir")] = Path("examples/suites"),
+) -> None:
+    """Import every *.seed.json in a folder, but only into an empty database (container start)."""
+    if _store().requirement_sets():
+        console.print("Database already has requirement sets; not seeding.")
+        return
+    for path in sorted(directory.glob("*.seed.json")):
+        import_suite(path)
+
+
+@app.command()
+def run(set_id: str, base_url: Annotated[str | None, typer.Option()] = None) -> None:
+    """Run every test case in a requirement set and triage the failures."""
+    _run(_store(), set_id, base_url)
+
+
+def _run(store: Store, set_id: str, base_url: str | None = None) -> None:
+    table = Table("Case", "Result", "ms", "Triage")
+    for ev in run_suite(store, set_id, get_settings(), base_url=base_url):
+        if ev["type"] == "batch_start":
+            console.print(
+                f"Batch {ev['batch_id']}: {ev['total']} cases against {ev['base_url']} "
+                f"(triage: {ev['triage_engine']})"
+            )
+        elif ev["type"] == "case_result":
+            r = ev["run"]
+            t = r.get("triage") or {}
+            colour = "green" if r["status"] == "pass" else "red"
+            table.add_row(
+                ev["title"][:60],
+                f"[{colour}]{r['status'].upper()}[/{colour}]",
+                str(r["duration_ms"]),
+                f"{t.get('label', '')}: {t.get('explanation', '')}"[:90] if t else "",
+            )
+        elif ev["type"] == "batch_done":
+            console.print(table)
+            console.print(f"[bold]{ev['pass']} passed, {ev['fail']} failed[/bold]")
+        elif ev["type"] in ("error", "warning"):
+            console.print(f"[yellow]{ev['message']}[/yellow]")
+
+
+@app.command("list")
+def list_sets() -> None:
+    """List requirement sets."""
+    table = Table("id", "source", "kind", "cases", "written by", "created")
+    for rs in _store().requirement_sets():
+        table.add_row(
+            rs["id"],
+            rs["source_name"],
+            rs["target_kind"],
+            str(rs["case_count"]),
+            rs["generated_by"],
+            rs["created_at"],
+        )
+    console.print(table)
+
+
+@app.command()
+def export(
+    set_id: str,
+    format: Annotated[str, typer.Option(help="md or csv")] = "md",
+    out: Annotated[Path | None, typer.Option(help="Write to a file instead of stdout.")] = None,
+) -> None:
+    """Export the UAT sign-off document (Markdown) or a CSV for spreadsheets."""
+    text = to_markdown(_store(), set_id) if format == "md" else to_csv(_store(), set_id)
+    if out:
+        out.write_text(text, encoding="utf-8")
+        console.print(f"Wrote {out}")
+    else:
+        print(text)
+
+
+@app.command("eval")
+def run_evaluation(
+    set_id: str,
+    out: Annotated[Path, typer.Option(help="Where to write the report.")] = Path("evals/results"),
+    only: Annotated[str | None, typer.Option(help="Comma-separated mutation names.")] = None,
+    triage_cases: Annotated[int, typer.Option(help="Cases per triage scenario.")] = 3,
+) -> None:
+    """Injected-bug detection rate + triage accuracy, through a local fault-injection proxy."""
+    from uatpilot.evals.harness import run_eval, write_report
+    from uatpilot.evals.mutations import CATALOGUE
+
+    mutations = CATALOGUE
+    if only:
+        wanted = set(only.split(","))
+        mutations = [m for m in CATALOGUE if m.name in wanted]
+    report = run_eval(
+        _store(),
+        set_id,
+        get_settings(),
+        mutations=mutations,
+        triage_cases=triage_cases,
+        log=lambda s: console.print(s, markup=False),
+    )
+    jpath, mpath = write_report(report, out)
+    d, t = report["detection"], report["triage"]
+    console.print(
+        f"[bold]Detection {d['detected']}/{d['measurable']} "
+        f"({d['masked']} masked) · Triage {t['correct']}/{t['failures']}[/bold]"
+    )
+    console.print(f"Wrote {jpath} and {mpath}")
+
+
+@app.command()
+def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Start the API + dashboard."""
+    import uvicorn
+
+    uvicorn.run("uatpilot.api:create_app", factory=True, host=host, port=port)
+
+
+def _print_event(ev: dict) -> None:
+    t = ev["type"]
+    if t == "text":
+        console.print(f"[dim]{ev['text'].strip()[:400]}[/dim]")
+    elif t == "tool_call":
+        console.print(f"[cyan]-> {ev['name']}[/cyan] {json.dumps(ev['input'])[:160]}")
+    elif t == "tool_result":
+        style = "red" if ev["is_error"] else "dim"
+        console.print(f"[{style}]<- {ev['content'][:200]}[/{style}]")
+    elif t == "submission":
+        style = "green" if ev["accepted"] else "yellow"
+        console.print(f"[{style}]submit: {ev['detail'][:600]}[/{style}]")
+    elif t == "usage":
+        console.print(f"[dim]usage: {ev['usage']}[/dim]")
+
+
+if __name__ == "__main__":
+    app()

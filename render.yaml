@@ -1,0 +1,25 @@
+# Render Blueprint: one web service that serves the API, the dashboard and headless Chromium.
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repository. See docs/deploy.md.
+services:
+  - type: web
+    name: uatpilot
+    runtime: docker
+    plan: starter # a persistent disk (for the SQLite run history) needs a paid instance
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: uatpilot-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # auto = Claude when ANTHROPIC_API_KEY is set, the deterministic rules triage otherwise.
+      - key: UATPILOT_ENGINE
+        value: auto
+      # Secrets: set them in the dashboard, never in this file.
+      # With a write token set, visitors get a read-only dashboard; you run suites with the token.
+      - key: UATPILOT_WRITE_TOKEN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
