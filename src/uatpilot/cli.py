@@ -19,10 +19,11 @@ from rich.table import Table
 
 from uatpilot.config import get_settings, has_claude_credentials
 from uatpilot.db import Store
-from uatpilot.export import to_csv, to_markdown
+from uatpilot.export import to_csv, to_junit, to_markdown
 from uatpilot.llm import AgentError
 from uatpilot.models import TargetKind, TestSuite
 from uatpilot.pipeline import run_suite
+from uatpilot.requirements import coverage, extract_criteria
 from uatpilot.target import TargetNotAllowed, check_target
 
 app = typer.Typer(add_completion=False, help="UAT test cases from requirements, run for real.")
@@ -39,6 +40,9 @@ def generate(
     base_url: Annotated[str, typer.Option(help="Target base URL (must be allowlisted).")],
     kind: Annotated[TargetKind, typer.Option(help="api or ui")] = TargetKind.API,
     run: Annotated[bool, typer.Option(help="Run the suite right after generating it.")] = False,
+    openapi: Annotated[
+        str | None, typer.Option(help="OpenAPI/Swagger spec: a file path or an allowlisted URL.")
+    ] = None,
 ) -> None:
     """Have the Claude agent write a UAT suite for a requirements doc."""
     from uatpilot.generator import Generator
@@ -48,12 +52,15 @@ def generate(
         check_target(base_url, settings)
     except TargetNotAllowed as exc:
         raise typer.BadParameter(str(exc)) from exc
+    spec_text = _load_spec(openapi, settings) if openapi else None
     if not has_claude_credentials():
         console.print("[red]Generation needs Claude: set ANTHROPIC_API_KEY.[/red]")
         raise typer.Exit(2)
     gen = Generator(base_url=base_url, target_kind=kind, settings=settings)
     try:
-        for ev in gen.generate(requirements.read_text(encoding="utf-8"), requirements.name):
+        for ev in gen.generate(
+            requirements.read_text(encoding="utf-8"), requirements.name, openapi=spec_text
+        ):
             _print_event(ev)
     except AgentError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -67,10 +74,28 @@ def generate(
         base_url=base_url,
         generated_by=f"claude:{settings.model}",
         drafts=gen.suite.test_cases,
+        coverage=gen.coverage,
     )
     console.print(f"[green]Saved {len(gen.suite.test_cases)} test cases as {set_id}[/green]")
     if run:
         _run(store, set_id)
+
+
+def _load_spec(source: str, settings) -> str:
+    """Read an OpenAPI spec from a file or an allowlisted URL and condense it for the agent."""
+    import httpx
+
+    from uatpilot.requirements import condense_openapi, parse_spec
+
+    try:
+        if source.startswith(("http://", "https://")):
+            check_target(source, settings)
+            text = httpx.get(source, timeout=settings.http_timeout).text
+        else:
+            text = Path(source).read_text(encoding="utf-8")
+        return condense_openapi(parse_spec(text))
+    except (TargetNotAllowed, OSError, ValueError, httpx.HTTPError) as exc:
+        raise typer.BadParameter(f"--openapi: {exc}") from exc
 
 
 @app.command("import")
@@ -79,16 +104,21 @@ def import_suite(path: Annotated[Path, typer.Argument(exists=True, readable=True
     doc = json.loads(path.read_text(encoding="utf-8"))
     suite = TestSuite.model_validate({"test_cases": doc["test_cases"]})
     req_path = path.parent / doc["requirements"]
+    raw = req_path.read_text(encoding="utf-8")
+    report = coverage(extract_criteria(raw), suite)
     store = _store()
     set_id = store.save_suite(
         source_name=req_path.name,
-        raw_text=req_path.read_text(encoding="utf-8"),
+        raw_text=raw,
         target_kind=doc["target_kind"],
         base_url=doc["base_url"],
         generated_by=f"import:{path.name}",
         drafts=suite.test_cases,
+        coverage=report,
     )
     console.print(f"Imported {len(suite.test_cases)} test cases as [bold]{set_id}[/bold]")
+    if report["missing"]:  # imports are not gated, but a gap is never silent
+        console.print(f"[yellow]Not covered: {', '.join(report['missing'])}[/yellow]")
 
 
 @app.command()
@@ -153,11 +183,14 @@ def list_sets() -> None:
 @app.command()
 def export(
     set_id: str,
-    format: Annotated[str, typer.Option(help="md or csv")] = "md",
+    format: Annotated[str, typer.Option(help="md, csv or junit")] = "md",
     out: Annotated[Path | None, typer.Option(help="Write to a file instead of stdout.")] = None,
 ) -> None:
-    """Export the UAT sign-off document (Markdown) or a CSV for spreadsheets."""
-    text = to_markdown(_store(), set_id) if format == "md" else to_csv(_store(), set_id)
+    """Export the UAT sign-off document (Markdown), a CSV, or JUnit XML for CI tools."""
+    writers = {"md": to_markdown, "csv": to_csv, "junit": to_junit}
+    if format not in writers:
+        raise typer.BadParameter("format must be md, csv or junit")
+    text = writers[format](_store(), set_id)
     if out:
         out.write_text(text, encoding="utf-8")
         console.print(f"Wrote {out}")

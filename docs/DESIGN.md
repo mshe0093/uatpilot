@@ -27,6 +27,14 @@ triages, the code executes and keeps the record honest.
 6. **Safety floor:** the agent can label a failure but can never downgrade it to a pass. The
    label is metadata, and it is clamped to what the evidence supports.
 
+### Added after reviewing comparable tools
+
+Schemathesis, Qodo Cover, Allure, ReportPortal, Hurl/Step CI and Shortest were reviewed (see the
+README's "How it compares"). That led to: JSON Schema response conformance, a coverage gate on
+acceptance criteria with a traceability matrix, history-aware results (new failure / fixed,
+history-based flakiness), a `test_defect` label, reuse of earlier and reviewer triage decisions,
+and JUnit XML export.
+
 ### Later
 
 - CI ingestion (a GitHub Action posting results into the dashboard).

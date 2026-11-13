@@ -12,7 +12,7 @@ from uatpilot.db import Store, new_id
 from uatpilot.llm import Event
 from uatpilot.models import RunResult, RunStatus, TestCase
 from uatpilot.runner import execute
-from uatpilot.triage import TriageAgent, first_failure, triage_or_fallback
+from uatpilot.triage import TriageAgent, failure_signature, first_failure, triage_or_fallback
 
 
 def use_claude(settings: Settings) -> bool:
@@ -54,7 +54,7 @@ def run_suite(
     counts = {"pass": 0, "fail": 0}
     for case in cases:
         yield {"type": "case_start", "test_case_id": case.id, "title": case.title}
-        run = yield from run_case(case, base, batch_id, settings, agent)
+        run = yield from run_case(case, base, batch_id, settings, agent, store)
         store.save_run(run)
         counts[run.status.value] += 1
         yield {"type": "case_result", "run": run.model_dump(mode="json"), "title": case.title}
@@ -68,21 +68,27 @@ def run_case(
     batch_id: str,
     settings: Settings,
     agent: TriageAgent | None,
+    store: Store | None = None,
 ) -> Iterator[Event]:
-    """Generator that yields trace events and *returns* the RunResult."""
+    """Generator that yields trace events and *returns* the RunResult. With a store, triage also
+    sees the case's history (Allure-style flakiness) and can reuse an earlier decision for the
+    identical failure (ReportPortal-style), which skips a model call."""
     run_id = new_id("run")
     passed, duration, evidence = execute(case, base_url, settings, run_id)
     status = RunStatus.PASS if passed else RunStatus.FAIL
-    triage = None
+    triage = signature = None
     if not passed:
-        # Immediate re-run: the only honest evidence for "flaky".
+        # Immediate re-run: direct evidence for "flaky".
         re_passed, _, re_evidence = execute(case, base_url, settings, run_id + "_rerun")
         rerun: dict[str, Any] = {"passed": re_passed}
         if not re_passed:
             rerun["first_failure"] = first_failure(re_evidence)
         evidence["rerun"] = rerun
         yield {"type": "rerun", "test_case_id": case.id, "passed": re_passed}
-        for ev in triage_or_fallback(agent, case, evidence, rerun):
+        signature = failure_signature(case.id, evidence)
+        history = store.case_history(case.id) if store else []
+        previous = store.reusable_triage(case.id, signature) if store else None
+        for ev in triage_or_fallback(agent, case, evidence, rerun, history, previous):
             if ev["type"] == "triage":
                 triage = ev["triage"]
             else:
@@ -96,4 +102,5 @@ def run_case(
         duration_ms=duration,
         evidence=evidence,
         triage=triage,
+        signature=signature,
     )

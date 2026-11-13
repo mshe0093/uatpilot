@@ -10,6 +10,23 @@ export async function getJSON<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export async function putJSON<T>(path: string, body: unknown, token?: string): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}${path}`, { method: "PUT", headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    let detail = `Request failed (${res.status})`;
+    try {
+      const json = await res.json();
+      if (typeof json.detail === "string") detail = json.detail;
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(detail);
+  }
+  return (await res.json()) as T;
+}
+
 /**
  * POST a JSON body and stream Server-Sent Events back. EventSource only supports GET, so this
  * parses the `data:` frames from a fetch() body stream instead (same as scam-checker-agent).

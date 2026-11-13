@@ -2,6 +2,7 @@ from conftest import FakeClient, message, tool_use
 
 from uatpilot.models import TestCase, TriageDecision, TriageLabel
 from uatpilot.triage import (
+    Signals,
     TriageAgent,
     apply_triage_floor,
     environment_signals,
@@ -18,26 +19,21 @@ def decision(label, conf="high"):
 
 # ---- the verdict floor ------------------------------------------------------------------------
 def test_flaky_requires_a_passing_rerun():
-    t = apply_triage_floor(decision("flaky"), rerun_passed=False, env_signals=[], engine="claude")
+    t = apply_triage_floor(decision("flaky"), Signals(rerun_passed=False), "claude")
     assert t.label is TriageLabel.REAL_REGRESSION
     assert t.floor_applied["from"] == "flaky"
 
 
 def test_flaky_allowed_when_rerun_passed():
-    t = apply_triage_floor(decision("flaky"), rerun_passed=True, env_signals=[], engine="claude")
+    t = apply_triage_floor(decision("flaky"), Signals(rerun_passed=True), "claude")
     assert t.label is TriageLabel.FLAKY and t.floor_applied is None
 
 
 def test_environment_issue_requires_a_signal():
-    t = apply_triage_floor(
-        decision("environment_issue"), rerun_passed=False, env_signals=[], engine="claude"
-    )
+    t = apply_triage_floor(decision("environment_issue"), Signals(rerun_passed=False), "claude")
     assert t.label is TriageLabel.REAL_REGRESSION
     t = apply_triage_floor(
-        decision("environment_issue"),
-        rerun_passed=False,
-        env_signals=["x: timeout"],
-        engine="claude",
+        decision("environment_issue"), Signals(rerun_passed=False, env=["x: timeout"]), "claude"
     )
     assert t.label is TriageLabel.ENVIRONMENT_ISSUE
 
@@ -71,10 +67,13 @@ def test_environment_signals():
 
 def test_rules_triage_paths():
     ev = {"steps": [step(404)]}
-    assert rules_triage(ev, True, []).label is TriageLabel.FLAKY
-    assert rules_triage(ev, False, []).label is TriageLabel.REAL_REGRESSION
+    assert rules_triage(ev, Signals(rerun_passed=True)).label is TriageLabel.FLAKY
+    assert rules_triage(ev, Signals(rerun_passed=False)).label is TriageLabel.REAL_REGRESSION
     timeout = {"steps": [{"name": "x", "error": {"kind": "timeout", "detail": "t"}}]}
-    assert rules_triage(timeout, False, ["x: timeout"]).label is TriageLabel.ENVIRONMENT_ISSUE
+    assert (
+        rules_triage(timeout, Signals(False, env=["x: timeout"])).label
+        is TriageLabel.ENVIRONMENT_ISSUE
+    )
 
 
 def test_repeated_503_stays_environment():
@@ -82,7 +81,10 @@ def test_repeated_503_stays_environment():
 
     ev = {"steps": [step(503)]}
     ev["rerun"] = {"passed": False, "first_failure": first_failure(ev)}
-    assert rules_triage(ev, False, environment_signals(ev)).label is TriageLabel.ENVIRONMENT_ISSUE
+    assert (
+        rules_triage(ev, Signals(False, env=environment_signals(ev))).label
+        is TriageLabel.ENVIRONMENT_ISSUE
+    )
 
 
 def test_reproduced_server_error_is_a_defect():
@@ -92,7 +94,7 @@ def test_reproduced_server_error_is_a_defect():
     ev["rerun"] = {"passed": False, "first_failure": first_failure(ev)}
     env = environment_signals(ev)
     assert env
-    assert rules_triage(ev, False, env).label is TriageLabel.REAL_REGRESSION
+    assert rules_triage(ev, Signals(False, env=env)).label is TriageLabel.REAL_REGRESSION
 
 
 # ---- the agent, with a scripted model ------------------------------------------------------------

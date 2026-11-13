@@ -24,10 +24,11 @@ from pydantic import BaseModel, Field
 from uatpilot import __version__
 from uatpilot.config import Settings, get_settings, has_claude_credentials
 from uatpilot.db import Store
-from uatpilot.export import to_csv, to_markdown
+from uatpilot.export import to_csv, to_junit, to_markdown, traceability
 from uatpilot.llm import AgentError
-from uatpilot.models import TargetKind
+from uatpilot.models import TargetKind, TriageLabel
 from uatpilot.pipeline import run_suite, use_claude
+from uatpilot.requirements import condense_openapi, parse_spec
 from uatpilot.target import TargetNotAllowed, check_target
 
 
@@ -36,6 +37,13 @@ class GenerateRequest(BaseModel):
     requirements: str = Field(min_length=20, max_length=40_000)
     base_url: str = Field(max_length=300)
     target_kind: TargetKind
+    # The spec's text (JSON or YAML), not a URL: fetching a URL server-side would be an SSRF hole.
+    openapi: str | None = Field(default=None, max_length=2_000_000)
+
+
+class HumanTriageRequest(BaseModel):
+    label: TriageLabel
+    explanation: str = Field(min_length=10, max_length=400)
 
 
 class RunRequest(BaseModel):
@@ -90,7 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT"],
         allow_headers=["Content-Type", "Authorization"],
     )
 
@@ -138,7 +146,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             d = c.model_dump(mode="json")
             d["latest_run"] = latest.get(c.id)
             cases.append(d)
-        return {**rs, "test_cases": cases, "stats": store.flaky_rate(set_id)}
+        return {
+            **rs,
+            "test_cases": cases,
+            "stats": store.flaky_rate(set_id),
+            "traceability": traceability(store, set_id),
+        }
 
     @app.get("/api/batches")
     def list_batches(requirement_set_id: str | None = None, limit: int = 50) -> list[dict]:
@@ -181,6 +194,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="uat-{set_id}.csv"'},
         )
+
+    @app.get("/api/requirement-sets/{set_id}/junit.xml")
+    def export_junit(set_id: str) -> PlainTextResponse:
+        try:
+            xml = to_junit(store, set_id)
+        except KeyError as exc:
+            raise HTTPException(404, "No such requirement set") from exc
+        return PlainTextResponse(
+            xml,
+            media_type="application/xml; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="uat-{set_id}.junit.xml"'},
+        )
+
+    @app.put("/api/runs/{run_id}/triage")
+    def human_triage(run_id: str, body: HumanTriageRequest, request: Request) -> dict[str, Any]:
+        """A reviewer's label for a failed run. It never changes the run's pass/fail status, and
+        later identical failures of the same case reuse it before asking the model."""
+        guard_write(request)
+        try:
+            return store.set_human_triage(run_id, body.label.value, body.explanation)
+        except KeyError as exc:
+            raise HTTPException(404, "No such run") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.get("/api/artifacts/{name}")
     def artifact(name: str) -> FileResponse:
@@ -235,13 +272,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             check_target(body.base_url, settings)
         except TargetNotAllowed as exc:
             raise HTTPException(400, str(exc)) from exc
+        openapi = None
+        if body.openapi:
+            try:
+                openapi = condense_openapi(parse_spec(body.openapi))
+            except Exception as exc:  # YAML/JSON errors from user input
+                raise HTTPException(400, f"Could not read the OpenAPI spec: {exc}") from exc
         from uatpilot.generator import Generator
 
         def events() -> Iterator[dict[str, Any]]:
             gen = Generator(
                 base_url=body.base_url, target_kind=body.target_kind, settings=settings
             )
-            yield from gen.generate(body.requirements, body.source_name)
+            yield from gen.generate(body.requirements, body.source_name, openapi=openapi)
             assert gen.suite is not None
             set_id = store.save_suite(
                 source_name=body.source_name,
@@ -250,6 +293,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 base_url=body.base_url,
                 generated_by=f"claude:{settings.model}",
                 drafts=gen.suite.test_cases,
+                coverage=gen.coverage,
             )
             yield {
                 "type": "saved",

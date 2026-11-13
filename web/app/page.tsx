@@ -159,6 +159,7 @@ export default function Dashboard() {
                     </button>
                     <a className="btn" href={`${API_URL}/api/requirement-sets/${detail.id}/export.md`}>UAT sign-off (.md)</a>
                     <a className="btn" href={`${API_URL}/api/requirement-sets/${detail.id}/export.csv`}>CSV</a>
+                    <a className="btn" href={`${API_URL}/api/requirement-sets/${detail.id}/junit.xml`}>JUnit XML</a>
                   </div>
                 </div>
                 <h3>Results per run</h3>
@@ -166,7 +167,8 @@ export default function Dashboard() {
                 {last && (
                   <p className="small muted">
                     Latest run: {last.passed}/{last.total} passed · {last.regressions} regressions ·{" "}
-                    {last.flaky} flaky · {last.env_issues} environment · flaky rate for this suite{" "}
+                    {last.flaky} flaky · {last.env_issues} environment · {last.test_defects} test
+                    defects · flaky rate for this suite{" "}
                     {pct(detail.stats.flaky_rate)}
                   </p>
                 )}
@@ -181,8 +183,35 @@ export default function Dashboard() {
 
               <div className="card">
                 <h3>Test cases <span className="muted small">(click a row for steps, triage and evidence)</span></h3>
-                <CaseTable cases={detail.test_cases} runs={runs} />
+                <CaseTable cases={detail.test_cases} runs={runs} token={token}
+                  canWrite={!health?.read_only || token !== ""}
+                  onReviewed={(r) => setRuns((prev) => ({ ...prev, [r.test_case_id]: r }))} />
               </div>
+
+              {detail.traceability.length > 0 && (
+                <div className="card">
+                  <h3>Requirements traceability{" "}
+                    <span className="muted small">
+                      ({detail.traceability.filter((t) => t.cases.length > 0).length}/
+                      {detail.traceability.length} criteria have a test case)
+                    </span>
+                  </h3>
+                  <table className="cases trace">
+                    <thead><tr><th style={{ width: 110 }}>Criterion</th><th style={{ width: 160 }}>Test cases</th><th>Result</th></tr></thead>
+                    <tbody>
+                      {detail.traceability.map((t) => (
+                        <tr key={t.criterion}>
+                          <td className="mono">{t.criterion}</td>
+                          <td className="small">{t.cases.join(", ") || "–"}</td>
+                          <td className={`small ${t.result.startsWith("FAIL") || t.result === "MISSING" ? "result-fail" : ""}`}>
+                            {t.result}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               <details className="card">
                 <summary><strong>Source requirements</strong></summary>

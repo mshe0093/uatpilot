@@ -3,11 +3,13 @@ against the assertions. Values captured from one step ({{booking_id}}) feed late
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from typing import Any
 
 import httpx
+from jsonschema import Draft202012Validator
 
 from uatpilot.config import Settings
 from uatpilot.models import ApiSpec, Assertion, AssertOp, AssertSource
@@ -134,6 +136,20 @@ def check(a: Assertion, resp: httpx.Response, elapsed_ms: int) -> dict[str, Any]
                 ok = _TYPES.get(str(exp), lambda _v: False)(actual)
             case AssertOp.LENGTH_AT_LEAST:
                 ok = len(actual) >= int(exp)  # type: ignore[arg-type]
+            case AssertOp.MATCHES_SCHEMA:
+                validator = Draft202012Validator(a.json_schema or {})
+                errors = sorted(validator.iter_errors(actual), key=lambda e: list(e.path))
+                ok = not errors
+                if errors:
+                    return {
+                        **a.model_dump(mode="json", exclude={"json_schema"}),
+                        "passed": False,
+                        "actual": _short(actual),
+                        "schema_errors": [
+                            f"{'/'.join(map(str, e.path)) or '<root>'}: {e.message[:200]}"
+                            for e in errors[:5]
+                        ],
+                    }
             case _:
                 ok = False
     except (TypeError, ValueError, re.error) as exc:
@@ -143,10 +159,23 @@ def check(a: Assertion, resp: httpx.Response, elapsed_ms: int) -> dict[str, Any]
             "actual": repr(actual),
             "error": str(exc),
         }
-    shown = "<missing>" if missing else actual
-    if isinstance(shown, str) and len(shown) > 300:
-        shown = shown[:300] + "...(truncated)"
-    return {**a.model_dump(mode="json"), "passed": ok, "actual": shown}
+    shown = "<missing>" if missing else _short(actual)
+    # The schema itself can be large; the evidence keeps the verdict, not a copy of the schema.
+    return {**a.model_dump(mode="json", exclude={"json_schema"}), "passed": ok, "actual": shown}
+
+
+def _short(value: Any, limit: int = 300) -> Any:
+    if isinstance(value, str) and len(value) > limit:
+        return value[:limit] + "...(truncated)"
+    if isinstance(value, dict | list):
+        text = json.dumps(value)
+        return value if len(text) <= limit * 3 else text[: limit * 3] + "...(truncated)"
+    return value
+
+
+def unresolved_vars(*parts: Any) -> list[str]:
+    """{{name}} placeholders still present after substitution: a capture that never happened."""
+    return sorted({m.group(1) for p in parts for m in _VAR.finditer(json.dumps(p, default=str))})
 
 
 # ---- execution --------------------------------------------------------------------------------
@@ -179,6 +208,8 @@ def run_api_spec(
                     "json": body,
                 },
             }
+            if missing_vars := unresolved_vars(url, headers, params, body):
+                record["unresolved_vars"] = missing_vars  # a test-defect signal for triage
             steps.append(record)
             started = time.perf_counter()
             try:

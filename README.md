@@ -1,35 +1,50 @@
 # UATPilot
 
 **Requirements in, UAT test cases out: an agent writes the cases, they run for real, every
-failure is triaged, and the results land on a dashboard.**
+failure is triaged, and the results land on a dashboard with a sign-off document.**
 
 Someone (often non-technical) writes requirements in prose. A junior analyst turns them into
 structured UAT test cases, runs them, and reports pass/fail up the chain, by hand, in a
-spreadsheet, every release. UATPilot automates that loop:
+spreadsheet, every release. UATPilot automates that loop and keeps a human in charge of the
+decisions.
 
-1. **Generate.** A Claude tool-use agent reads a requirements doc, *looks at the real target
-   first* (read-only `http_probe` for APIs; `inspect_page` in a real browser for web UIs), and
-   writes test cases through a strict Pydantic schema. Any invalid case (a hallucinated field, an
-   unknown operator, a step with no assertion) is bounced back to the model with the exact
-   validation errors. It is never stored.
-2. **Run.** Each case is executable: API cases make real HTTP calls with `httpx` and assert on the
-   real responses, chaining ids between steps (`{{booking_id}}`). UI cases drive headless Chromium
-   through Playwright and take a screenshot on failure.
-3. **Triage.** A failure gets an immediate re-run and a check for deterministic environment
-   signals (5xx, timeout, 429, auth expiry), then a triage agent labels it `real_regression`,
-   `flaky` or `environment_issue` with a one-line explanation.
-4. **Report.** A Next.js dashboard shows the pass/fail trend per run, the flaky rate, each case's
-   steps, triage and raw evidence, with a live SSE trace while a suite runs. It also exports the
-   **UAT sign-off document** (Markdown, with tester sign-off lines) or a CSV.
+1. **Generate.** A Claude tool-use agent reads the requirements doc (and the target's OpenAPI spec,
+   if there is one), *looks at the real target first* (read-only `http_probe` for APIs,
+   `inspect_page` in a real browser for web UIs), and writes test cases through a strict Pydantic
+   schema. An invalid case (a hallucinated field, an unknown operator, a step with no assertion)
+   is bounced back to the model with the exact validation errors and never stored.
+2. **Coverage gate.** Every acceptance criterion in the document (`AC-2.1`, `NFR-1`...) must be
+   covered by a case or explicitly declared not coverable with a reason, or the suite is
+   rejected. The sign-off document carries the resulting **traceability matrix**.
+3. **Run.** Each case is executable. API cases make real HTTP calls with `httpx`, chain ids
+   between steps (`{{booking_id}}`), and assert on fields, or on the **whole response against a
+   JSON Schema** taken from the OpenAPI spec. UI cases drive headless Chromium through Playwright
+   and take a screenshot on failure.
+4. **Triage.** A failure gets an immediate re-run, a look at the case's history, and a check for
+   deterministic signals. An identical earlier failure that was already decided is **reused**
+   (a reviewer's decision first). Otherwise a triage agent labels it `real_regression`, `flaky`,
+   `environment_issue` or `test_defect`, with a one-line explanation.
+5. **Report.** A Next.js dashboard shows the pass/fail trend, the flaky rate, *new failure / fixed
+   / still failing* against the previous run, each case's steps, triage and raw evidence, and a
+   live SSE trace while a suite runs. A reviewer can relabel any failure. Exports: the **UAT
+   sign-off document** (Markdown, with traceability and tester sign-off lines), CSV and **JUnit
+   XML** for CI tools.
 
 ### The safety floor
 
 As in `scam-checker-agent`, the model can annotate but cannot override. A failed assertion is
-stored as `fail`, full stop: the triage label is metadata. The label is also clamped to what the
-evidence supports: `flaky` only if the immediate re-run actually passed, and `environment_issue`
-only if the evidence contains an environment signal. Otherwise it becomes `real_regression`, with
-`floor_applied` recording what the model claimed (`src/uatpilot/triage.py`). The same rules run
-without the model when no API key is set, so the tool works offline.
+stored as `fail`, full stop: the triage label is metadata, and neither the model nor a reviewer
+can change the status. The label is also clamped to what the evidence supports
+(`src/uatpilot/triage.py`):
+
+| Label | Allowed only if |
+|---|---|
+| `flaky` | the immediate re-run passed, or the case's recent history alternates (Allure's rule) |
+| `environment_issue` | the evidence has an environment signal: 5xx, timeout, connection error, 429, auth expiry |
+| `test_defect` | the evidence has a test-defect signal: unresolved `{{variable}}`, an assertion that couldn't be evaluated, an invalid selector |
+| anything else | becomes `real_regression`, with `floor_applied` recording what was claimed |
+
+The same rules run without the model when no API key is set, so the tool works offline.
 
 ## Targets
 
@@ -76,73 +91,92 @@ uatpilot import examples/suites/restful-booker.seed.json   # hand-written fixtur
 uatpilot import examples/suites/saucedemo.seed.json
 uatpilot list
 uatpilot run <requirement-set-id>                      # real runs against the sandbox
-uatpilot export <requirement-set-id> --out signoff.md  # the UAT sign-off document
+uatpilot export <requirement-set-id> --out signoff.md  # sign-off doc (also --format csv|junit)
 
 # with ANTHROPIC_API_KEY set: have the agent write a suite from a requirements doc
 uatpilot generate examples/requirements/restful-booker.md \
   --base-url https://restful-booker.herokuapp.com --kind api --run
 uatpilot generate examples/requirements/saucedemo.md \
   --base-url https://www.saucedemo.com --kind ui --run
+uatpilot generate requirements.md --base-url <url> --openapi openapi.yaml   # schema-aware
 
 uatpilot eval <api-requirement-set-id>                 # injected-bug detection + triage accuracy
 ```
 
 Dashboard: `uatpilot serve` (API on :8000) and `cd web && npm install && npm run dev` (:3000).
 Docker: `docker build -t uatpilot . && docker run -p 8000:8000 uatpilot` serves both on :8000.
-Deploying: [`docs/deploy.md`](docs/deploy.md).
+Deploying: [`docs/deploy.md`](docs/deploy.md). Configuration: [`.env.example`](.env.example).
+
+## How it compares
+
+Before adding features, I read the code of the best-known open-source tools that solve part of
+this problem. UATPilot borrows these ideas from them, adapted to UAT:
+
+| Project | What it does | What UATPilot took from it |
+|---|---|---|
+| [Schemathesis](https://github.com/schemathesis/schemathesis) | OpenAPI-driven API testing | whole-response `matches_schema` conformance checks; OpenAPI as an input |
+| [Qodo Cover](https://github.com/qodo-ai/qodo-cover) | LLM-generated unit tests, kept only if they run and raise coverage | a coverage gate on generation, with *acceptance criteria* as the coverage unit. Failing cases are kept, not discarded: in UAT a failure is often the finding |
+| [Allure Report](https://github.com/allure-framework/allure2) | test reporting with history | history-based flaky detection, *new failure / fixed* markers, a separate "broken test" outcome |
+| [ReportPortal](https://github.com/reportportal/service-auto-analyzer) | ML auto-analysis of failures | reuse of earlier decisions for the same failure, with human decisions weighted first; reviewer relabelling |
+| [Hurl](https://github.com/Orange-OpenSource/hurl), [Step CI](https://github.com/stepci/stepci) | declarative HTTP tests | captures between steps; JUnit XML output for CI |
+| [Shortest](https://github.com/antiwork/shortest) | natural-language E2E tests run by an AI at test time, with an action cache | (design check) UATPilot already compiles each case to deterministic steps at generation time, so runs are reproducible and cost no model calls |
+
+What it doesn't try to be: a fuzzer (Schemathesis and RESTler do that far better), a
+record/replay tool (Keploy), or a runtime browser agent (browser-use, Skyvern). Its job is the
+UAT loop: from a business requirements doc to a signed-off, traceable result.
 
 ## Architecture
 
 ```
-requirements.md ──▶ generation agent (Claude tool use) ──strict schema──▶ test_cases (SQLite)
-                     tools: http_probe / inspect_page,                        │
-                            submit_test_cases                                 ▼
-                                                         runner: httpx  |  Playwright (Chromium)
-                                                                         │ pass/fail + evidence
-                                                                         ▼
-                                     fail ─▶ immediate re-run ─▶ env signals ─▶ triage agent
-                                                                         │  (label clamped by the floor)
-                                                                         ▼
-                       runs + run_batches (SQLite) ──▶ FastAPI (+SSE) ──▶ Next.js dashboard, MD/CSV export
+requirements.md (+ openapi) ─▶ generation agent ─schema + coverage gate─▶ test_cases (SQLite)
+                                tools: http_probe / inspect_page                   │
+                                                                                   ▼
+                                                     runner: httpx  |  Playwright (Chromium)
+                                                                     │ pass/fail + evidence
+                                                                     ▼
+            fail ─▶ re-run + history + signals ─▶ reuse earlier decision? ─▶ triage agent
+                                                                     │  (label clamped by the floor)
+                                                                     ▼
+           runs + run_batches ─▶ FastAPI (+SSE) ─▶ dashboard · sign-off MD · CSV · JUnit XML
 ```
 
 | Path | What |
 |---|---|
 | `src/uatpilot/models.py` | Strict schemas: test cases, API/UI executable specs, triage |
+| `src/uatpilot/requirements.py` | Acceptance-criterion extraction, coverage report, OpenAPI condenser |
 | `src/uatpilot/llm.py` | Hand-written tool-use loop shared by both agents (streams every step) |
-| `src/uatpilot/generator.py` | Generation agent and its tools |
-| `src/uatpilot/runner/` | `api.py` (httpx, JSON paths, captures), `ui.py` (Playwright, page inspection) |
-| `src/uatpilot/triage.py` | Environment signals, rules triage, triage agent, the floor |
+| `src/uatpilot/generator.py` | Generation agent, its tools and the coverage gate |
+| `src/uatpilot/runner/` | `api.py` (httpx, JSON paths, captures, JSON Schema), `ui.py` (Playwright) |
+| `src/uatpilot/triage.py` | Signals, history rule, reuse, rules triage, triage agent, the floor |
 | `src/uatpilot/pipeline.py` | Run a suite: execute → re-run → triage → store |
-| `src/uatpilot/api.py` | FastAPI: reads, SSE run/generate streams, exports, static dashboard |
+| `src/uatpilot/export.py` | Sign-off Markdown with traceability, CSV, JUnit XML |
+| `src/uatpilot/api.py` | FastAPI: reads, SSE run/generate streams, reviewer triage, exports |
 | `src/uatpilot/evals/` | Fault-injection proxy, bug catalogue, eval harness |
 | `web/` | Next.js dashboard |
 
 Stack: Python 3.11+, FastAPI, Pydantic, Anthropic SDK (`claude-opus-5-5`, adaptive thinking,
-server-side refusal fallback), httpx, Playwright, SQLite, Next.js 16, Docker, GitHub Actions.
+server-side refusal fallback), httpx, jsonschema, Playwright, SQLite, Next.js 16, Docker, GitHub
+Actions.
 
-## Changes from the original plan
+## Design notes
 
-The design is in [`docs/DESIGN.md`](docs/DESIGN.md). These are the deliberate changes, with the reason
-for each:
+The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices:
 
-- **Name:** AuditPilot → **UATPilot**.
-- **Target:** public sandboxes instead of a buggy demo API built into the repo. To keep the
-  injected-bug eval honest anyway, bugs are injected by a local proxy in front of the sandbox
-  rather than in the sandbox itself (see `evals/README.md`).
-- **Playwright UI testing is in the MVP**, not a stretch goal, including an `inspect_page` tool so
-  the agent writes selectors from real page attributes.
-- **Schema additions:** a `run_batches` table (to group one "Run suite" click for the trend chart),
-  `requirement_ref` on each case (traceability back to the acceptance criterion), and `seq`,
-  `duration_ms` and `triage_json` columns.
-- **Eval set:** 20 injected bugs against one requirements doc rather than 20-30 separate docs, plus
-  a labelled triage set. The detection rate excludes bugs masked by the sandbox's own defects.
-- **SQLite only.** No Postgres: one service, with a Render disk for history.
+- **Public sandboxes as targets.** Bugs for the eval are injected by a local proxy in front of
+  the sandbox, so the eval stays honest without modifying a service we don't own.
+- **Playwright UI testing is in the MVP**, with an `inspect_page` tool so the agent writes selectors
+  from real page attributes.
+- **Schema additions beyond the first sketch:** `run_batches` (one row per "Run suite", for the
+  trend), `requirement_ref` on each case (traceability), per-run `signature` (triage reuse) and
+  `coverage_json` per requirement set. Older databases are migrated in place.
+- **Eval set:** 20 injected bugs against one requirements doc, plus a labelled triage set. The
+  detection rate excludes bugs masked by the sandbox's own defects.
+- **SQLite only:** one service, with a Render disk for history.
 
 ## Tests
 
-`pytest` runs 50+ offline tests in CI: a scripted fake Claude client, mocked HTTP, a local
-fake booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1.
-No network and no API key needed.
+`pytest` runs 70+ offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
+booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1. No
+network and no API key needed.
 
 MIT licensed.

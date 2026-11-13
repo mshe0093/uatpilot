@@ -12,6 +12,7 @@ const SERIES = [
   { key: "regressions", outcome: "real_regression" },
   { key: "flaky", outcome: "flaky" },
   { key: "env_issues", outcome: "environment_issue" },
+  { key: "test_defects", outcome: "test_defect" },
   { key: "untriaged", outcome: "untriaged" },
 ] as const;
 
@@ -27,7 +28,7 @@ export function TrendChart({ batches }: { batches: Batch[] }) {
   }
   const rows: Row[] = batches.map((b) => ({
     ...b,
-    untriaged: Math.max(0, b.failed - b.regressions - b.flaky - b.env_issues),
+    untriaged: Math.max(0, b.failed - b.regressions - b.flaky - b.env_issues - b.test_defects),
   }));
   const maxTotal = Math.max(...rows.map((r) => r.total), 1);
   const width = Math.max(320, rows.length * 44 + PAD.left + PAD.right);
