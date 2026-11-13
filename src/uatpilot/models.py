@@ -51,6 +51,9 @@ class AssertOp(StrEnum):
     GREATER_THAN = "greater_than"
     TYPE_IS = "type_is"  # string | number | integer | boolean | array | object | null
     LENGTH_AT_LEAST = "length_at_least"
+    # The value at `path` (or the whole JSON body when path is empty) validates against
+    # `json_schema`: whole-response conformance, as Schemathesis checks against an OpenAPI spec.
+    MATCHES_SCHEMA = "matches_schema"
 
 
 class Assertion(Strict):
@@ -58,9 +61,27 @@ class Assertion(Strict):
     path: str | None = None
     op: AssertOp
     expected: str | int | float | bool | None = None
+    json_schema: dict[str, Any] | None = Field(
+        default=None, description="Only for op matches_schema: a JSON Schema object."
+    )
 
     @model_validator(mode="after")
     def _check(self) -> Assertion:
+        if self.op is AssertOp.MATCHES_SCHEMA:
+            if self.source is not AssertSource.JSON:
+                raise ValueError("matches_schema needs source 'json'")
+            if not self.json_schema:
+                raise ValueError("matches_schema needs a json_schema")
+            from jsonschema import Draft202012Validator
+            from jsonschema.exceptions import SchemaError
+
+            try:
+                Draft202012Validator.check_schema(self.json_schema)
+            except SchemaError as exc:
+                raise ValueError(f"json_schema is not a valid JSON Schema: {exc.message}") from exc
+            return self
+        if self.json_schema is not None:
+            raise ValueError("json_schema is only used with op matches_schema")
         if self.source in (AssertSource.JSON, AssertSource.HEADER) and not self.path:
             raise ValueError(f"source '{self.source}' needs a path")
         if self.op not in (AssertOp.EXISTS, AssertOp.NOT_EXISTS) and self.expected is None:
@@ -194,9 +215,21 @@ class TestCaseDraft(Strict):
         return TargetKind(self.executable.kind)
 
 
+class NotCovered(Strict):
+    """A criterion the agent deliberately did not write a case for, and why (shown to the
+    reviewer in the traceability matrix, so a gap is never silent)."""
+
+    requirement_ref: str = Field(min_length=1)
+    reason: str = Field(min_length=10, max_length=300)
+
+
 class TestSuite(Strict):
     __test__ = False
     test_cases: list[TestCaseDraft] = Field(min_length=1, max_length=40)
+    not_covered: list[NotCovered] = Field(
+        default_factory=list,
+        description="Criteria with no executable case (e.g. untestable from outside), with reasons.",
+    )
 
 
 class TestCase(TestCaseDraft):
@@ -217,6 +250,9 @@ class TriageLabel(StrEnum):
     REAL_REGRESSION = "real_regression"
     FLAKY = "flaky"
     ENVIRONMENT_ISSUE = "environment_issue"
+    # The test itself is broken (unresolved variable, bad assertion): Allure's BROKEN,
+    # ReportPortal's "Automation Bug". Only allowed with a deterministic test-defect signal.
+    TEST_DEFECT = "test_defect"
 
 
 class TriageDecision(Strict):
@@ -231,8 +267,11 @@ class Triage(BaseModel):
     label: TriageLabel
     explanation: str
     confidence: str
-    engine: Literal["claude", "rules"]
+    # claude/rules: decided now; reused: copied from an identical earlier failure of the same
+    # case (ReportPortal-style auto-analysis); human: a reviewer set it from the dashboard.
+    engine: Literal["claude", "rules", "reused", "human"]
     floor_applied: dict[str, Any] | None = None
+    reused_from: str | None = None  # run id the decision was copied from
 
 
 class RunResult(BaseModel):
@@ -244,6 +283,7 @@ class RunResult(BaseModel):
     duration_ms: int
     evidence: dict[str, Any]
     triage: Triage | None = None
+    signature: str | None = None  # failure signature, for reusing an earlier triage decision
 
 
 def suite_json_schema() -> dict[str, Any]:

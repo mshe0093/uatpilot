@@ -13,6 +13,7 @@ from uatpilot.config import Settings, get_settings
 from uatpilot.llm import Event, Tool, ToolLoop, ToolOutcome
 from uatpilot.models import TargetKind, TestSuite, UiStep, suite_json_schema
 from uatpilot.prompts import GENERATION_NUDGE, GENERATION_SYSTEM
+from uatpilot.requirements import coverage, coverage_problems, extract_criteria
 from uatpilot.runner.ui import inspect_page
 from uatpilot.target import TargetNotAllowed, probe
 
@@ -44,6 +45,8 @@ class Generator:
         self.target_kind = target_kind
         self.client = client or anthropic.Anthropic()
         self.probes = 0
+        self.criteria: list[str] = []
+        self.coverage: dict[str, Any] | None = None
         self.loop = ToolLoop(
             client=self.client,
             settings=self.settings,
@@ -99,6 +102,12 @@ class Generator:
                 f"kind: {wrong[:5]}. Resubmit with executable.kind = '{self.target_kind.value}'.",
                 is_error=True,
             )
+        # Coverage gate (qodo-cover gates generated tests on code coverage; for UAT the unit is
+        # the acceptance criterion): every criterion is covered or explicitly declared not.
+        report = coverage(self.criteria, suite)
+        if problems := coverage_problems(report):
+            return ToolOutcome(problems, is_error=True)
+        self.coverage = report
         return ToolOutcome(f"Accepted {len(suite.test_cases)} test cases.", accepted=suite)
 
     def _tools(self) -> list[Tool]:
@@ -161,15 +170,32 @@ class Generator:
         return tools
 
     # ---- run --------------------------------------------------------------------------------
-    def generate(self, requirements: str, source_name: str) -> Iterator[Event]:
-        """Yields trace events. When it finishes, `self.loop.result` holds the TestSuite."""
+    def generate(
+        self, requirements: str, source_name: str, openapi: str | None = None
+    ) -> Iterator[Event]:
+        """Yields trace events. When it finishes, `self.suite` holds the TestSuite and
+        `self.coverage` the traceability report. `openapi` is a condensed spec
+        (requirements.condense_openapi)."""
+        self.criteria = extract_criteria(requirements)
         prompt = (
             f"Target kind: {self.target_kind.value}\n"
             f"Target base URL: {self.base_url}\n"
+            f"Acceptance criteria found in the document: {', '.join(self.criteria) or '(no ids)'}\n"
             f"Requirements document ({source_name}):\n"
             f"<requirements>\n{requirements}\n</requirements>"
         )
-        yield {"type": "start", "source_name": source_name, "target": self.base_url}
+        if openapi:
+            prompt += (
+                "\nOpenAPI spec for the target (condensed; $refs resolved):\n"
+                f"<openapi>\n{openapi}\n</openapi>"
+            )
+        yield {
+            "type": "start",
+            "source_name": source_name,
+            "target": self.base_url,
+            "criteria": len(self.criteria),
+            "openapi": bool(openapi),
+        }
         yield from self.loop.run(prompt)
 
     @property

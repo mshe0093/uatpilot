@@ -1,5 +1,6 @@
 export type Status = "pass" | "fail";
-export type TriageLabel = "real_regression" | "flaky" | "environment_issue";
+export type TriageLabel = "real_regression" | "flaky" | "environment_issue" | "test_defect";
+export type Change = "first_run" | "new_failure" | "fixed" | "still_failing" | "still_passing";
 
 export interface Health {
   status: string;
@@ -24,8 +25,9 @@ export interface Triage {
   label: TriageLabel;
   explanation: string;
   confidence: string;
-  engine: "claude" | "rules";
+  engine: "claude" | "rules" | "reused" | "human";
   floor_applied?: { from: string; reasons: string[] } | null;
+  reused_from?: string | null;
 }
 
 export interface TestCase {
@@ -48,8 +50,15 @@ export interface Stats {
   pass_rate: number;
 }
 
+export interface TraceRow {
+  criterion: string;
+  cases: string[];
+  result: string;
+}
+
 export interface RequirementSet extends Omit<RequirementSetSummary, "case_count"> {
   raw_text: string;
+  traceability: TraceRow[];
   test_cases: TestCase[];
   stats: Stats;
 }
@@ -66,6 +75,7 @@ export interface Batch {
   regressions: number;
   flaky: number;
   env_issues: number;
+  test_defects: number;
 }
 
 export interface Run {
@@ -78,6 +88,7 @@ export interface Run {
   triage: Triage | null;
   title?: string;
   requirement_ref?: string;
+  change?: Change;
 }
 
 export type StreamEvent =

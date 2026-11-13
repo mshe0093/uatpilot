@@ -20,7 +20,9 @@ WORKDIR /app
 
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
-RUN pip install ".[ui]" \
+# libatomic1: Playwright's bundled Node driver needs it and python:slim doesn't ship it.
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 \
+    && pip install ".[ui]" \
     && python -m playwright install --with-deps chromium \
     && rm -rf /root/.cache /var/lib/apt/lists/*
 

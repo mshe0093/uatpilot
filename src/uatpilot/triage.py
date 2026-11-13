@@ -1,12 +1,16 @@
-"""Failure triage: an immediate re-run, deterministic environment signals, then the triage agent.
+"""Failure triage: an immediate re-run, deterministic signals, reuse of earlier decisions, then
+the triage agent.
 
 The verdict floor (same idea as scam-checker-agent's): the triage label is metadata attached to a
-failed run. Nothing here can turn a failed run into a pass, and the model's label is clamped to
-what the evidence supports:
-  * "flaky" only if the immediate re-run actually passed;
+failed run. Nothing here can turn a failed run into a pass, and the label is clamped to what the
+evidence supports:
+  * "flaky" only if the immediate re-run passed, or the case's recent history alternates between
+    pass and fail (Allure's history rule);
   * "environment_issue" only if the evidence contains an environment signal (5xx, timeout,
     connection failure, 429, auth expiry);
-  * anything else becomes "real_regression", with `floor_applied` recording what the model said.
+  * "test_defect" only if the evidence contains a test-defect signal (an unresolved {{variable}},
+    an assertion that could not be evaluated, an invalid selector);
+  * anything else becomes "real_regression", with `floor_applied` recording what was claimed.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from typing import Any
 
 import anthropic
@@ -55,14 +60,58 @@ def environment_signals(evidence: dict[str, Any]) -> list[str]:
     return signals
 
 
-def apply_triage_floor(
-    decision: TriageDecision, *, rerun_passed: bool, env_signals: list[str], engine: str
-) -> Triage:
+_BAD_SELECTOR = re.compile(
+    r"(not a valid selector|Unexpected token|selector.*(parse|syntax))", re.I
+)
+
+
+def broken_test_signals(evidence: dict[str, Any]) -> list[str]:
+    """Hard facts that the *test* is broken, not the system (Allure BROKEN / RP Automation Bug)."""
+    signals: list[str] = []
+    for step in evidence.get("steps", []):
+        name = step.get("name") or step.get("action") or "step"
+        if missing := step.get("unresolved_vars"):
+            signals.append(f"{name}: unresolved variable(s) {', '.join(missing)}")
+        for a in step.get("assertions", []):
+            if a.get("error"):
+                signals.append(f"{name}: assertion could not be evaluated ({a['error'][:100]})")
+        err = step.get("error") or {}
+        if err.get("kind") == "browser" and _BAD_SELECTOR.search(str(err.get("detail", ""))):
+            signals.append(f"{name}: invalid selector ({str(err['detail'])[:100]})")
+    return signals
+
+
+def history_flaky(statuses: list[str]) -> bool:
+    """Allure's rule, on this case's previous results (newest first, up to 5): flaky if there is
+    a pass that is more recent than a failure, i.e. the case alternates instead of staying red."""
+    recent = statuses[:5]
+    if "pass" not in recent or "fail" not in recent:
+        return False
+    return recent.index("pass") < len(recent) - 1 - recent[::-1].index("fail")
+
+
+@dataclass
+class Signals:
+    rerun_passed: bool
+    env: list[str] = field(default_factory=list)
+    test_defect: list[str] = field(default_factory=list)
+    history: list[str] = field(default_factory=list)  # previous statuses, newest first
+
+    @property
+    def history_flaky(self) -> bool:
+        return history_flaky(self.history)
+
+
+def apply_triage_floor(decision: TriageDecision, signals: Signals, engine: str) -> Triage:
     label, reasons = decision.label, []
-    if label is TriageLabel.FLAKY and not rerun_passed:
-        reasons.append("model said flaky, but the immediate re-run failed too")
-    if label is TriageLabel.ENVIRONMENT_ISSUE and not env_signals:
-        reasons.append("model said environment_issue, but the evidence has no environment signal")
+    if label is TriageLabel.FLAKY and not (signals.rerun_passed or signals.history_flaky):
+        reasons.append(
+            "flaky claimed, but the re-run failed too and the history is not alternating"
+        )
+    if label is TriageLabel.ENVIRONMENT_ISSUE and not signals.env:
+        reasons.append("environment_issue claimed, but the evidence has no environment signal")
+    if label is TriageLabel.TEST_DEFECT and not signals.test_defect:
+        reasons.append("test_defect claimed, but the evidence has no test-defect signal")
     if reasons:
         return Triage(
             label=TriageLabel.REAL_REGRESSION,
@@ -77,6 +126,37 @@ def apply_triage_floor(
         confidence=decision.confidence,
         engine=engine,  # type: ignore[arg-type]
     )
+
+
+_NUMBERS = re.compile(r"\d+")
+
+
+def failure_signature(case_id: str, evidence: dict[str, Any]) -> str:
+    """Case + first failure with numbers masked, so 'expected 204, got 201 for booking 5512' and
+    the same failure for booking 5590 share a signature (ReportPortal's same-test-case match)."""
+    return f"{case_id}|{_NUMBERS.sub('#', first_failure(evidence))}"
+
+
+def reuse_triage(previous: dict[str, Any] | None, signals: Signals) -> Triage | None:
+    """Reuse an earlier decision for an identical failure of the same case, re-checked against
+    *today's* evidence by the same floor. Human decisions win over model ones (the caller orders
+    them); flaky is never reused, because it is a statement about one particular run."""
+    if not previous or previous.get("label") == TriageLabel.FLAKY.value:
+        return None
+    decision = TriageDecision(
+        label=previous["label"],
+        explanation=previous["explanation"],
+        confidence=previous.get("confidence", "medium"),
+    )
+    t = apply_triage_floor(decision, signals, engine="reused")
+    if t.floor_applied:
+        return None  # today's evidence no longer supports it: decide afresh
+    who = "a reviewer" if previous.get("engine") == "human" else "an earlier triage"
+    t.explanation = (
+        f"{decision.explanation} (Same failure as run {previous['run_id']}, labelled by {who}.)"
+    )
+    t.reused_from = previous["run_id"]
+    return t
 
 
 def first_failure(evidence: dict[str, Any]) -> str:
@@ -101,9 +181,17 @@ def rerun_first_failure(evidence: dict[str, Any]) -> str | None:
     return (evidence.get("rerun") or {}).get("first_failure")
 
 
-def rules_triage(evidence: dict[str, Any], rerun_passed: bool, env: list[str]) -> Triage:
+def rules_triage(evidence: dict[str, Any], signals: Signals) -> Triage:
     """Deterministic fallback when no model is available. Same floor, by construction."""
     what = first_failure(evidence)
+    rerun_passed, env = signals.rerun_passed, signals.env
+    if signals.test_defect:
+        return Triage(
+            label=TriageLabel.TEST_DEFECT,
+            explanation=f"The test itself is broken: {signals.test_defect[0]}.",
+            confidence="medium",
+            engine="rules",
+        )
     reproduced = not rerun_passed and rerun_first_failure(evidence) == what
     # 502/503/504 mean "unavailable / gateway": environment even when they repeat.
     only_server_errors = env and all(
@@ -130,6 +218,14 @@ def rules_triage(evidence: dict[str, Any], rerun_passed: bool, env: list[str]) -
             label=TriageLabel.FLAKY,
             explanation=f"Failed once ({what}) but passed on an immediate re-run.",
             confidence="medium",
+            engine="rules",
+        )
+    if signals.history_flaky:
+        return Triage(
+            label=TriageLabel.FLAKY,
+            explanation=f"Failed twice now ({what}), but this case has alternated between pass "
+            "and fail in its recent runs.",
+            confidence="low",
             engine="rules",
         )
     return Triage(
@@ -172,7 +268,7 @@ class TriageAgent:
         return ToolOutcome("Recorded.", accepted=d)
 
     def triage(
-        self, case: TestCase, evidence: dict[str, Any], rerun: dict[str, Any], env: list[str]
+        self, case: TestCase, evidence: dict[str, Any], rerun: dict[str, Any], signals: Signals
     ) -> Iterator[Event]:
         """Yields trace events; the last is {"type": "triage", "triage": Triage}."""
         self._health_checked = False
@@ -211,17 +307,25 @@ class TriageAgent:
                 "passed": rerun["passed"],
                 "first_failure": rerun.get("first_failure"),
             },
-            "environment_signals_detected_by_code": env,
+            "environment_signals_detected_by_code": signals.env,
+            "test_defect_signals_detected_by_code": signals.test_defect,
+            "previous_statuses_newest_first": signals.history[:10],
         }
         yield from loop.run(
             "<failure_report>\n" + json.dumps(payload, default=str)[:60000] + "\n</failure_report>"
         )
-        yield {
-            "type": "triage",
-            "triage": apply_triage_floor(
-                loop.result, rerun_passed=rerun["passed"], env_signals=env, engine="claude"
-            ),
-        }
+        yield {"type": "triage", "triage": apply_triage_floor(loop.result, signals, "claude")}
+
+
+def build_signals(
+    evidence: dict[str, Any], rerun: dict[str, Any], history: list[str] | None = None
+) -> Signals:
+    return Signals(
+        rerun_passed=rerun["passed"],
+        env=environment_signals(evidence),
+        test_defect=broken_test_signals(evidence),
+        history=history or [],
+    )
 
 
 def triage_or_fallback(
@@ -229,12 +333,19 @@ def triage_or_fallback(
     case: TestCase,
     evidence: dict[str, Any],
     rerun: dict[str, Any],
+    history: list[str] | None = None,
+    previous: dict[str, Any] | None = None,
 ) -> Iterator[Event]:
-    env = environment_signals(evidence)
+    """`history`: this case's earlier statuses, newest first. `previous`: the best earlier
+    decision for the same failure signature (see Store.reusable_triage), if any."""
+    signals = build_signals(evidence, rerun, history)
+    if reused := reuse_triage(previous, signals):
+        yield {"type": "triage", "triage": reused}
+        return
     if agent is not None:
         try:
-            yield from agent.triage(case, evidence, rerun, env)
+            yield from agent.triage(case, evidence, rerun, signals)
             return
         except AgentError as exc:
             yield {"type": "warning", "message": f"Triage agent unavailable ({exc}); used rules."}
-    yield {"type": "triage", "triage": rules_triage(evidence, rerun["passed"], env)}
+    yield {"type": "triage", "triage": rules_triage(evidence, signals)}

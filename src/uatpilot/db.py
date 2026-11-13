@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from uatpilot.models import RunResult, TestCase, TestCaseDraft
+from uatpilot.models import RunResult, TestCase, TestCaseDraft, Triage
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS requirement_sets (
@@ -82,6 +82,15 @@ class Store:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Additive, idempotent column migrations for databases created by older versions."""
+        for table, column, decl in MIGRATIONS:
+            cols = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+            if column not in cols:
+                with self._conn:
+                    self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     @contextmanager
     def tx(self) -> Iterator[sqlite3.Connection]:
@@ -101,16 +110,29 @@ class Store:
         base_url: str,
         generated_by: str,
         drafts: list[TestCaseDraft],
+        coverage: dict[str, Any] | None = None,
     ) -> str:
         set_id = new_id("rs")
         with self.tx() as c:
             c.execute(
-                "INSERT INTO requirement_sets VALUES (?,?,?,?,?,?,?)",
-                (set_id, source_name, raw_text, target_kind, base_url, generated_by, now()),
+                "INSERT INTO requirement_sets (id, source_name, raw_text, target_kind, base_url, "
+                "generated_by, created_at, coverage_json) VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    set_id,
+                    source_name,
+                    raw_text,
+                    target_kind,
+                    base_url,
+                    generated_by,
+                    now(),
+                    json.dumps(coverage) if coverage is not None else None,
+                ),
             )
             for i, d in enumerate(drafts, start=1):
                 c.execute(
-                    "INSERT INTO test_cases VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO test_cases (id, requirement_set_id, seq, title, requirement_ref, "
+                    "preconditions, steps_json, expected_result, priority, target_kind, "
+                    "executable_spec_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         f"{set_id}-TC{i:03d}",
                         set_id,
@@ -140,7 +162,12 @@ class Store:
         row = self._conn.execute(
             "SELECT * FROM requirement_sets WHERE id = ?", (set_id,)
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        raw = d.pop("coverage_json", None)
+        d["coverage"] = json.loads(raw) if raw else None
+        return d
 
     def test_cases(self, set_id: str) -> list[TestCase]:
         rows = self._conn.execute(
@@ -187,7 +214,9 @@ class Store:
         t = run.triage
         with self.tx() as c:
             c.execute(
-                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO runs (id, test_case_id, batch_id, run_at, status, duration_ms, "
+                "evidence_json, triage_label, triage_explanation, triage_json, signature) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.id,
                     run.test_case_id,
@@ -199,8 +228,53 @@ class Store:
                     t.label.value if t else None,
                     t.explanation if t else None,
                     t.model_dump_json() if t else None,
+                    run.signature,
                 ),
             )
+
+    # ---- history, reuse and human review ---------------------------------------------------
+    def case_history(self, case_id: str, limit: int = 10) -> list[str]:
+        """Previous statuses of one case, newest first."""
+        rows = self._conn.execute(
+            "SELECT status FROM runs WHERE test_case_id = ? ORDER BY run_at DESC, rowid DESC "
+            "LIMIT ?",
+            (case_id, limit),
+        ).fetchall()
+        return [r["status"] for r in rows]
+
+    def reusable_triage(self, case_id: str, signature: str) -> dict[str, Any] | None:
+        """The best earlier decision for the same failure of the same case: a reviewer's label
+        first (ReportPortal weights manual analysis highest), then the newest model decision.
+        Floored and reused decisions are not reused again, to avoid chains of copies."""
+        rows = self._conn.execute(
+            "SELECT id, triage_json FROM runs WHERE test_case_id = ? AND signature = ? "
+            "AND triage_json IS NOT NULL ORDER BY run_at DESC, rowid DESC LIMIT 50",
+            (case_id, signature),
+        ).fetchall()
+        candidates = []
+        for r in rows:
+            t = json.loads(r["triage_json"])
+            if t.get("engine") in ("human", "claude") and not t.get("floor_applied"):
+                candidates.append({**t, "run_id": r["id"]})
+        humans = [c for c in candidates if c["engine"] == "human"]
+        return (humans or candidates or [None])[0]
+
+    def set_human_triage(self, run_id: str, label: str, explanation: str) -> dict[str, Any]:
+        """A reviewer's decision. It replaces the label and explanation; it never touches the
+        run's pass/fail status."""
+        row = self._conn.execute("SELECT status FROM runs WHERE id = ?", (run_id,)).fetchone()
+        if row is None:
+            raise KeyError(run_id)
+        if row["status"] != "fail":
+            raise ValueError("Only failed runs are triaged.")
+        triage = Triage(label=label, explanation=explanation, confidence="high", engine="human")  # type: ignore[arg-type]
+        with self.tx() as c:
+            c.execute(
+                "UPDATE runs SET triage_label = ?, triage_explanation = ?, triage_json = ? "
+                "WHERE id = ?",
+                (triage.label.value, explanation, triage.model_dump_json(), run_id),
+            )
+        return triage.model_dump(mode="json")
 
     def batches(self, set_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         where, args = ("WHERE b.requirement_set_id = ?", [set_id]) if set_id else ("", [])
@@ -212,7 +286,8 @@ class Store:
                        SUM(r.status = 'fail') AS failed,
                        SUM(r.triage_label = 'real_regression') AS regressions,
                        SUM(r.triage_label = 'flaky') AS flaky,
-                       SUM(r.triage_label = 'environment_issue') AS env_issues
+                       SUM(r.triage_label = 'environment_issue') AS env_issues,
+                       SUM(r.triage_label = 'test_defect') AS test_defects
                 FROM run_batches b
                 JOIN requirement_sets rs ON rs.id = b.requirement_set_id
                 LEFT JOIN runs r ON r.batch_id = b.id
@@ -229,13 +304,34 @@ class Store:
                WHERE r.batch_id = ? ORDER BY tc.seq""",
             (batch_id,),
         ).fetchall()
+        previous = self._previous_batch_statuses(batch_id)
         out = []
         for r in rows:
             d = dict(r)
             d["evidence"] = json.loads(d.pop("evidence_json"))
             d["triage"] = json.loads(d.pop("triage_json")) if d.get("triage_json") else None
+            d["change"] = _change(previous.get(d["test_case_id"]), d["status"])
             out.append(d)
         return out
+
+    def _previous_batch_statuses(self, batch_id: str) -> dict[str, str]:
+        """Statuses from the batch before this one for the same requirement set."""
+        row = self._conn.execute(
+            """SELECT p.id FROM run_batches b JOIN run_batches p
+                 ON p.requirement_set_id = b.requirement_set_id
+                 AND (p.started_at < b.started_at OR (p.started_at = b.started_at
+                      AND p.rowid < b.rowid))
+               WHERE b.id = ? ORDER BY p.started_at DESC, p.rowid DESC LIMIT 1""",
+            (batch_id,),
+        ).fetchone()
+        if not row:
+            return {}
+        return {
+            r["test_case_id"]: r["status"]
+            for r in self._conn.execute(
+                "SELECT test_case_id, status FROM runs WHERE batch_id = ?", (row["id"],)
+            )
+        }
 
     def latest_runs_by_case(self, set_id: str) -> dict[str, dict[str, Any]]:
         rows = self._conn.execute(
@@ -265,4 +361,19 @@ class Store:
         }
 
 
-_COUNTS = {"total", "passed", "failed", "regressions", "flaky", "env_issues"}
+_COUNTS = {"total", "passed", "failed", "regressions", "flaky", "env_issues", "test_defects"}
+
+# (table, column, declaration): applied by Store._migrate when the column is missing.
+MIGRATIONS = [
+    ("requirement_sets", "coverage_json", "TEXT"),  # traceability report from generation
+    ("runs", "signature", "TEXT"),  # case + normalised first failure, for triage reuse
+]
+
+
+def _change(before: str | None, now_status: str) -> str:
+    """Allure-style status change against the previous run of the same suite."""
+    if before is None:
+        return "first_run"
+    if before == now_status:
+        return "still_passing" if now_status == "pass" else "still_failing"
+    return "fixed" if now_status == "pass" else "new_failure"

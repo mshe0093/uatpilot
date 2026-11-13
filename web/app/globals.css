@@ -14,6 +14,7 @@
   --serious: #ec835a;
   --critical: #d03b3b;
   --good-text: #006300;
+  --neutral: #7d8590; /* test defect: deliberately not a status hue */
   --radius: 12px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: light;
@@ -111,3 +112,13 @@ label.field input, label.field select, label.field textarea { padding: 8px; bord
 textarea { min-height: 180px; font-family: var(--mono); font-size: 0.82rem; }
 .error { color: var(--critical); }
 details summary { cursor: pointer; }
+
+.change { font-size: 0.72rem; font-weight: 600; padding: 1px 6px; border-radius: 6px;
+  border: 1px solid var(--border); color: var(--muted); margin-left: 6px; white-space: nowrap; }
+.change-new_failure { color: var(--text); border-color: var(--critical); }
+.change-fixed { color: var(--good-text); border-color: var(--good); }
+.review { display: grid; grid-template-columns: 170px 1fr auto; gap: 8px; margin-top: 8px; }
+.review select, .review input { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); }
+@media (max-width: 640px) { .review { grid-template-columns: 1fr; } }
+table.trace td.result-fail { font-weight: 600; }
