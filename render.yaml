@@ -14,12 +14,16 @@ services:
       mountPath: /data
       sizeGB: 1
     envVars:
-      # auto = Claude when ANTHROPIC_API_KEY is set, the deterministic rules triage otherwise.
+      # auto = the model when a provider key is set, the deterministic rules triage otherwise.
       - key: UATPILOT_ENGINE
         value: auto
       # Secrets: set them in the dashboard, never in this file.
       # With a write token set, visitors get a read-only dashboard; you run suites with the token.
       - key: UATPILOT_WRITE_TOKEN
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: UATPILOT_MODEL
+        value: gemini-3.1-flash-lite
       - key: ANTHROPIC_API_KEY
         sync: false

@@ -10,7 +10,7 @@ decisions.
 
 ![UATPilot dashboard: a verdict line saying the release is not ready to sign off, and the run matrix with one row per test case and one column per run, where red tails mark regressions](docs/assets/dashboard-light.png)
 
-1. **Generate.** A Claude tool-use agent reads the requirements doc (and the target's OpenAPI spec,
+1. **Generate.** A tool-use agent (Claude, or a free model such as Gemini) reads the requirements doc (and the target's OpenAPI spec,
    if there is one), *looks at the real target first* (read-only `http_probe` for APIs,
    `inspect_page` in a real browser for web UIs), and writes test cases through a strict Pydantic
    schema. An invalid case (a hallucinated field, an unknown operator, a step with no assertion)
@@ -235,7 +235,7 @@ The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices
 
 ## Tests
 
-`pytest` runs 94 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
+`pytest` runs 94 offline tests in CI: scripted fake model clients (Claude and OpenAI-compatible), mocked HTTP, a local fake
 booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1. No
 network and no API key needed.
 

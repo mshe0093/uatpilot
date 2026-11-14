@@ -12,7 +12,11 @@ One Docker image serves the API, the static dashboard, and a headless Chromium f
 3. In the service's **Environment** tab set:
    - `UATPILOT_WRITE_TOKEN`: a long random string. With it set, visitors see a read-only
      dashboard; you paste the token into the dashboard's token box to run suites.
-   - `ANTHROPIC_API_KEY` (optional): enables generation and Claude triage.
+   - `GEMINI_API_KEY` (optional, free): enables generation and model triage. The blueprint sets
+     `UATPILOT_MODEL=gemini-3.1-flash-lite`, whose free quota is larger than the default model's.
+   - `ANTHROPIC_API_KEY` (optional, paid): use Claude instead. Set one key, not both.
+   - Never put a key in `render.yaml` or any committed file: set it only in Render's Environment
+     tab, which keeps it out of the repo.
 4. After the first deploy, open the dashboard, paste the token, and press **Run suite** on each
    seed suite so the trend chart has data.
 
