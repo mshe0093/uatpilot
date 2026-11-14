@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import re
@@ -63,6 +64,14 @@ def _jsonable(o: Any) -> Any:
     return str(o)
 
 
+# The static Next.js export needs inline scripts and styles; everything else is same-origin only.
+CSP = (
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; "
+    "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+
+
 class _Limiter:
     """Sliding-window limit on write calls per client IP (generation costs real money)."""
 
@@ -110,12 +119,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("Referrer-Policy", "no-referrer")
         resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Content-Security-Policy", CSP)
+        resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return resp
 
     def guard_write(request: Request) -> None:
         if settings.write_token:
             auth = request.headers.get("authorization", "")
-            if auth != f"Bearer {settings.write_token}":
+            expected = f"Bearer {settings.write_token}"
+            if not hmac.compare_digest(auth.encode(), expected.encode()):
                 raise HTTPException(401, "This deployment is read-only without a write token.")
         ip = request.client.host if request.client else "unknown"
         if not limiter.allow(ip):
@@ -164,7 +178,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/batches")
     def list_batches(requirement_set_id: str | None = None, limit: int = 50) -> list[dict]:
-        return list(reversed(store.batches(requirement_set_id, min(limit, 200))))
+        return list(reversed(store.batches(requirement_set_id, min(max(limit, 1), 200))))
 
     @app.get("/api/batches/{batch_id}")
     def get_batch(batch_id: str) -> dict[str, Any]:

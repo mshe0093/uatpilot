@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
+from uatpilot import __version__
+
 # Public sandboxes that exist for people to practise test automation against. The runner refuses
 # every other host unless it is added here, so a deployed instance can't be pointed at arbitrary
 # infrastructure (SSRF) and the tool can't be used to hammer a third party.
@@ -100,7 +102,7 @@ class Settings:
     write_token: str | None = field(
         default_factory=lambda: os.getenv("UATPILOT_WRITE_TOKEN") or None
     )
-    user_agent: str = "UATPilot/0.2 (test-automation portfolio project)"
+    user_agent: str = f"UATPilot/{__version__} (+https://github.com/mshe0093/uatpilot)"
 
     def __post_init__(self) -> None:
         if not self.model:

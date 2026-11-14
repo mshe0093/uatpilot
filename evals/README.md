@@ -36,7 +36,9 @@ of 20 bugs, each tagged with the acceptance criterion it breaks, is in
 3. **Never flipped to pass.** In every triage scenario, every failed run must still be stored as
    `fail`. The report records this as a yes/no.
 4. **Generation quality** (plan metric 2: the share of agent-written cases a QA reviewer accepts
-   unedited) needs a human reviewer and an API key. Not measured yet; see "Status" below.
+   unedited): 18 of 30 (60%), with 9 needing a minor edit and 3 a rework. The reviewer was an AI
+   model, not an independent human; per-case verdicts are in
+   [`review-gemini-suites.md`](review-gemini-suites.md).
 
 ## Status and caveats
 
@@ -46,7 +48,8 @@ of 20 bugs, each tagged with the acceptance criterion it breaks, is in
   `gemini-3.1-flash-lite`) is the one that says something about the generation agent: 20/20
   detection, 15/15 triage. Its cases are looser on two criteria the real sandbox already fails,
   so 0 mutations were masked for it (2 for the seed suite).
-- Generation quality as a human reviewer would judge it (metric 4) is still not measured.
+- Generation quality (metric 4) was judged by an AI reviewer, not an independent human, so treat
+  the 60% as an estimate.
 - **One triage rule was changed after a smoke run.** The first rule labelled any reproduced 5xx a
   defect, which mislabelled the `env_503` scenario. It now treats 502/503/504 as environment even
   when they repeat, and a reproduced plain 500 as a defect. That change was made after seeing eval

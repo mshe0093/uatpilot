@@ -34,6 +34,40 @@ def _require() -> None:
 SPLIT_TEXT = "every expected word is on the page, in order, but not as one contiguous string"
 
 
+def _new_page(browser: Any, settings: Settings) -> Any:
+    """A page that can't leave the allowlist: a link, redirect or script that navigates to another
+    host is aborted, and so is any request to a host that is not allowlisted and is local or
+    private (cloud metadata, the server's own ports). Third-party assets such as fonts still load."""
+    page = browser.new_context(user_agent=settings.user_agent).new_page()
+
+    def guard(route: Any) -> None:
+        req = route.request
+        url = req.url
+        if not url.startswith(("http://", "https://")) or settings.host_allowed(url):
+            route.continue_()
+        elif req.is_navigation_request() or _is_local(url):
+            route.abort("blockedbyclient")
+        else:
+            route.continue_()
+
+    page.route("**/*", guard)
+    return page
+
+
+def _is_local(url: str) -> bool:
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or "").lower()
+    if host == "localhost" or host.endswith((".localhost", ".internal", ".local")):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+
+
 def words_in_order(expected: str, text: str) -> bool:
     """True when the expected text's words all appear in `text` in order, with other content in
     between: the assertion glued separate elements together, so the test is wrong, not the app."""
@@ -120,7 +154,7 @@ def run_ui_spec(
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
-            page = browser.new_context(user_agent=settings.user_agent).new_page()
+            page = _new_page(browser, settings)
             page.on("console", lambda m: m.type == "error" and console_errors.append(m.text[:300]))
             page.on("pageerror", lambda e: console_errors.append(f"pageerror: {str(e)[:300]}"))
             for step in spec.steps:
@@ -194,7 +228,7 @@ def inspect_page(base_url: str, setup_steps: list[UiStep], settings: Settings) -
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         try:
-            page = browser.new_context(user_agent=settings.user_agent).new_page()
+            page = _new_page(browser, settings)
             steps = setup_steps or [UiStep(action=UiAction.GOTO, value="/")]
             for s in steps:
                 if s.is_assertion:
