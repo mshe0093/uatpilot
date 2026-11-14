@@ -8,6 +8,8 @@ structured UAT test cases, runs them, and reports pass/fail up the chain, by han
 spreadsheet, every release. UATPilot automates that loop and keeps a human in charge of the
 decisions.
 
+**Live demo:** [uatpilot-pt95.onrender.com](https://uatpilot-pt95.onrender.com) (read-only for visitors; on Render's free plan it sleeps when idle, so the first load can take about a minute, and run history resets on each deploy).
+
 ![UATPilot dashboard: a verdict line saying the release is not ready to sign off, and the run matrix with one row per test case and one column per run, where red tails mark regressions](docs/assets/dashboard-light.png)
 
 1. **Generate.** A tool-use agent (Claude, or a free model such as Gemini) reads the requirements doc (and the target's OpenAPI spec,
