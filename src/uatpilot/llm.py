@@ -47,6 +47,10 @@ class AgentError(RuntimeError):
     pass
 
 
+class RateLimited(AgentError):
+    """The provider refused for quota; retrying within this batch will not help."""
+
+
 @dataclass
 class ToolUse:
     id: str
@@ -103,6 +107,8 @@ class AnthropicBackend:
                 fallbacks="default",
             ) as stream:
                 response = stream.get_final_message()
+        except anthropic.RateLimitError as exc:
+            raise RateLimited("Claude API rate limit reached; try again later.") from exc
         except anthropic.APIStatusError as exc:
             raise AgentError(f"Claude API error {exc.status_code}: {exc.message}") from exc
         except anthropic.APIConnectionError as exc:
@@ -224,6 +230,28 @@ def _pick(schema: dict[str, Any], value: Any) -> dict[str, Any]:
     return variants[0]
 
 
+def _tool_call_dict(tc: Any) -> dict[str, Any]:
+    if hasattr(tc, "model_dump"):
+        return tc.model_dump(exclude_none=True)
+    return {
+        "id": tc.id,
+        "type": "function",
+        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+    }
+
+
+def _error_detail(exc: Any) -> str:
+    """The provider's own error message; the SDK's .message is often just 'Error code: 400'."""
+    body = getattr(exc, "body", None)
+    if isinstance(body, list) and body:
+        body = body[0]
+    if isinstance(body, dict):
+        err = body.get("error", body)
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+    return str(exc.message)
+
+
 class OpenAICompatBackend:
     def __init__(self, settings: Settings, max_tokens: int, client: Any = None) -> None:
         import openai
@@ -231,7 +259,7 @@ class OpenAICompatBackend:
         self.settings, self.max_tokens = settings, max_tokens
         self.label = f"{settings.provider}:{settings.model}"
         self.client = client or openai.OpenAI(
-            api_key=settings.llm_api_key, base_url=settings.llm_base_url, max_retries=3
+            api_key=settings.llm_api_key, base_url=settings.llm_base_url, max_retries=1
         )
         self.messages: list[dict[str, Any]] = []
         self.schemas: dict[str, dict[str, Any]] = {}
@@ -263,12 +291,12 @@ class OpenAICompatBackend:
                 max_tokens=self.max_tokens,
             )
         except openai.RateLimitError as exc:
-            raise AgentError(
+            raise RateLimited(
                 f"{self.settings.provider} free-tier rate limit reached; try again later."
             ) from exc
         except openai.APIStatusError as exc:
             raise AgentError(
-                f"{self.settings.provider} API error {exc.status_code}: {str(exc.message)[:300]}"
+                f"{self.settings.provider} API error {exc.status_code}: {_error_detail(exc)[:300]}"
             ) from exc
         except openai.APIConnectionError as exc:
             raise AgentError(f"Could not reach the {self.settings.provider} API.") from exc
@@ -284,17 +312,9 @@ class OpenAICompatBackend:
                 "content": msg.content or "",
                 **(
                     {
-                        "tool_calls": [
-                            {
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments,
-                                },
-                            }
-                            for tc in msg.tool_calls
-                        ]
+                        # model_dump keeps provider extras such as Gemini 3's thought
+                        # signatures, which must be sent back on the next turn.
+                        "tool_calls": [_tool_call_dict(tc) for tc in msg.tool_calls]
                     }
                     if msg.tool_calls
                     else {}

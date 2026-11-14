@@ -79,9 +79,9 @@ def test_provider_autodetect_and_defaults(monkeypatch, tmp_path):
     assert Settings().provider == "anthropic"  # nothing set
     monkeypatch.setenv("GEMINI_API_KEY", "k")
     s = Settings()
-    assert s.provider == "gemini" and s.model == "gemini-2.5-flash"
+    assert s.provider == "gemini" and s.model == "gemini-3.5-flash"
     assert s.llm_base_url.startswith("https://generativelanguage.googleapis.com")
-    assert s.model_label == "gemini:gemini-2.5-flash" and has_llm_credentials(s)
+    assert s.model_label == "gemini:gemini-3.5-flash" and has_llm_credentials(s)
     monkeypatch.setenv("UATPILOT_PROVIDER", "groq")
     assert Settings().provider == "groq" and not has_llm_credentials(Settings())
     monkeypatch.setenv("UATPILOT_PROVIDER", "nope")
@@ -148,9 +148,9 @@ def test_generation_on_free_provider(tmp_path):
     )
     events = list(g.generate("AC-1.1 ping works", "r.md"))
     assert [e["accepted"] for e in events if e["type"] == "submission"] == [False, True]
-    assert events[-1]["model"] == "gemini:gemini-2.5-flash"
+    assert events[-1]["model"] == "gemini:gemini-3.5-flash"
     first, second = fake.requests
-    assert first["model"] == "gemini-2.5-flash"
+    assert first["model"] == "gemini-3.5-flash"
     assert first["messages"][0]["role"] == "system"
     assert first["tools"][-1]["function"]["name"] == "submit_test_cases"
     # the rejection went back as a tool message tied to the call id
@@ -198,7 +198,7 @@ def test_triage_records_the_model(tmp_path):
         agent.triage(TRIAGE_CASE, {"steps": [step(404)]}, {"passed": False}, Signals(False))
     )
     t = events[-1]["triage"]
-    assert t.engine == "llm" and t.model == "gemini:gemini-2.5-flash"
+    assert t.engine == "llm" and t.model == "gemini:gemini-3.5-flash"
 
 
 def test_rate_limit_becomes_agent_error(tmp_path):
@@ -247,4 +247,60 @@ def test_doctor_succeeds_on_a_tool_call(monkeypatch):
         app, ["doctor"], env={"UATPILOT_PROVIDER": "gemini", "GEMINI_API_KEY": "AIzaTESTKEY0123"}
     )
     assert r.exit_code == 0, r.output
-    assert "Working" in r.output and "AIza…23" in r.output and "TESTKEY" not in r.output
+    assert "Working" in r.output and "AIza...23" in r.output and "TESTKEY" not in r.output
+
+
+def test_provider_extras_on_tool_calls_are_sent_back(tmp_path):
+    """Gemini 3 rejects a follow-up turn (400) unless each tool call's thought signature returns."""
+    from openai.types.chat import ChatCompletionMessageToolCall
+
+    signed = ChatCompletionMessageToolCall.model_validate(
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "submit_test_cases", "arguments": "{not json"},
+            "extra_content": {"google": {"thought_signature": "sig-abc"}},
+        }
+    )
+    fake = FakeOpenAI(
+        [
+            completion(signed),
+            completion(tool_call("submit_test_cases", {"test_cases": [CASE]}, id="call_2")),
+        ]
+    )
+    g = Generator(
+        base_url=BASE, target_kind=TargetKind.API, client=fake, settings=gemini_settings(tmp_path)
+    )
+    list(g.generate("AC-1.1 ping", "r.md"))
+    echoed = next(m for m in fake.requests[1]["messages"] if m["role"] == "assistant")
+    assert echoed["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "sig-abc"}}
+
+
+def test_quota_error_switches_the_batch_to_rules(tmp_path):
+    """After one 429 the rest of the run is triaged by rules, without calling the model again."""
+    import httpx
+    import openai
+    from test_triage import CASE as TRIAGE_CASE
+    from test_triage import step
+
+    from uatpilot.triage import triage_or_fallback
+
+    calls = []
+
+    class Limited(FakeOpenAI):
+        def _create(self, **kw):
+            calls.append(kw)
+            raise openai.RateLimitError(
+                "quota",
+                response=httpx.Response(429, request=httpx.Request("POST", "https://x")),
+                body=None,
+            )
+
+    agent = TriageAgent(base_url=BASE, client=Limited([]), settings=gemini_settings(tmp_path))
+    agent._health_checked = True  # skip the live health probe
+    evidence, rerun = {"steps": [step(404)]}, {"passed": False}
+    first = list(triage_or_fallback(agent, TRIAGE_CASE, evidence, rerun))
+    second = list(triage_or_fallback(agent, TRIAGE_CASE, evidence, rerun))
+    assert any(e["type"] == "warning" for e in first)
+    assert not any(e["type"] == "warning" for e in second)
+    assert second[-1]["triage"].engine == "rules" and len(calls) == 1

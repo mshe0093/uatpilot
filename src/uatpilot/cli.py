@@ -255,7 +255,7 @@ def doctor() -> None:
         )
         raise typer.Exit(2)
     if key:
-        console.print(f"Key: {key[:4]}…{key[-2:]} ({len(key)} characters)")
+        console.print(f"Key: {key[:4]}...{key[-2:]} ({len(key)} characters)")
     loop = ToolLoop(
         settings=settings,
         system="You are a connectivity check. Call the report tool exactly once.",

@@ -33,7 +33,7 @@ PROVIDERS: dict[str, Provider] = {
     "gemini": Provider(
         "GEMINI_API_KEY",
         "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "gemini-2.5-flash",
+        "gemini-3.5-flash",
         free_tier=True,
     ),
     "groq": Provider(

@@ -455,3 +455,39 @@ def _run_with(store, set_id, settings, monkeypatch, handler, client=None):
     monkeypatch.setattr(pipeline, "execute", fake_execute)
     events = list(pipeline.run_suite(store, set_id, settings, client=client))
     return events[-1]["batch_id"]
+
+
+def test_coverage_gate_bounds_not_covered():
+    """not_covered can't be used to excuse most of a document (seen live with a small model)."""
+    from uatpilot.requirements import coverage_problems
+
+    doc = " ".join(f"AC-{i}.1" for i in range(1, 9))  # 8 criteria: at most 2 may be excused
+    excuse = "Prone to environmental changes."
+
+    def suite(n_excused):
+        return TestSuite.model_validate(
+            {
+                "test_cases": [api_case(f"AC-{i}.1") for i in range(n_excused + 1, 9)],
+                "not_covered": [
+                    {"requirement_ref": f"AC-{i}.1", "reason": excuse}
+                    for i in range(1, n_excused + 1)
+                ],
+            }
+        )
+
+    assert coverage_problems(coverage(extract_criteria(doc), suite(2))) is None
+    problem = coverage_problems(coverage(extract_criteria(doc), suite(3)))
+    assert problem and "3 of 8" in problem and "at most 2" in problem
+
+
+def test_split_expected_text_is_a_test_defect_signal():
+    """Seen live: a generated case expected two cart items as one string; the page lists them
+    on separate lines. The app is right, the assertion is wrong."""
+    from uatpilot.runner.ui import SPLIT_TEXT, words_in_order
+
+    page = "QTY Description\n1\nSauce Labs Backpack\ncarry...\n$29.99\n1\nSauce Labs Bike Light"
+    assert words_in_order("Sauce Labs Backpack Sauce Labs Bike Light", page)
+    assert not words_in_order("Sauce Labs Fleece Jacket", page)
+    assert not words_in_order("Backpack", page)  # one word: a plain miss, not a split
+    step = {"action": "expect_text", "failure": f"expected ... [{SPLIT_TEXT}]"}
+    assert broken_test_signals({"steps": [step]})
