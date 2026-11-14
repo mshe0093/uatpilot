@@ -14,7 +14,7 @@ triages, the code executes and keeps the record honest.
 
 1. **Input:** a requirements document (Markdown or plain text: user stories, acceptance criteria)
    and, optionally, the target's OpenAPI/Swagger spec.
-2. **Generate:** a Claude tool-use agent drafts UAT test cases (preconditions, steps, expected
+2. **Generate:** a tool-use agent (Claude or an OpenAI-compatible model) drafts UAT test cases (preconditions, steps, expected
    result, priority, the criterion each case covers) through a strict Pydantic schema, so a
    hallucinated case can't silently corrupt the suite.
 3. **Run:** each case carries an executable check. API cases make real HTTP calls and assert on
