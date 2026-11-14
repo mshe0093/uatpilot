@@ -3,6 +3,23 @@
 All notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-11-14
+
+### Added
+- Review of the 30 agent-written cases (`evals/review-gemini-suites.md`): 18 accepted as
+  written, 9 minor edits, 3 rework.
+- Generation rejects `expect_url` checks that every page of the site would pass, and the prompt
+  asks for identity checks on filtered results and self-created test data.
+- Live demo on Render's free plan.
+
+### Security
+- Content-Security-Policy, HSTS and Permissions-Policy headers.
+- Constant-time comparison of the write token.
+- CSV exports neutralise spreadsheet formulas.
+- UI runs abort navigation off the allowlist and requests to local or private addresses; the
+  Docker image's allowlist no longer includes localhost.
+- `limit` query parameters are clamped at both ends.
+
 ## [0.3.1] - 2026-11-14
 
 ### Added

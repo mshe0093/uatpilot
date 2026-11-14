@@ -45,7 +45,7 @@ can change the status. The label is also clamped to what the evidence supports
 |---|---|
 | `flaky` | the immediate re-run passed, or the case's recent history alternates (Allure's rule) |
 | `environment_issue` | the evidence has an environment signal: 5xx, timeout, connection error, 429, auth expiry |
-| `test_defect` | the evidence has a test-defect signal: unresolved `{{variable}}`, an assertion that couldn't be evaluated, an invalid selector |
+| `test_defect` | the evidence has a test-defect signal: unresolved `{{variable}}`, an assertion that couldn't be evaluated, an invalid selector, expected text split across page elements |
 | anything else | becomes `real_regression`, with `floor_applied` recording what was claimed |
 
 The same rules run without the model when no API key is set, so the tool works offline.
@@ -76,7 +76,8 @@ shadcn dashboard templates): see [`docs/UI-NOTES.md`](docs/UI-NOTES.md).
 
 Both targets are **public sandboxes built for practising test automation**, so no one's
 production system takes the traffic. Requests are rate-limited and only one suite runs at a time.
-Hosts outside the allowlist are refused, which also blocks SSRF on a deployed instance.
+Hosts outside the allowlist are refused, which also blocks SSRF on a deployed instance; in the
+browser, navigation to another host and requests to local or private addresses are aborted.
 
 | Target | Kind | Sandbox |
 |---|---|---|
@@ -117,6 +118,12 @@ are now fixed: the coverage gate accepted a suite that excused 9 of 13 criteria 
 (at most a quarter may now be excused), and the triage first called that broken assertion a
 regression (expected text glued across separate page elements is now a detected test-defect
 signal).
+
+**Would a QA reviewer accept the agent's cases as written?** 18 of the 30 (60%); 9 need a minor
+edit (a check the criterion names is missing, or the case leans on shared sandbox data) and 3 need
+rework. The review was done by an AI model at the owner's request, not an independent human, so
+treat it as an estimate. Two of the three rework flaws are now caught automatically. Per-case
+verdicts: [`evals/review-gemini-suites.md`](evals/review-gemini-suites.md).
 
 Method, caveats and per-bug results: [`evals/README.md`](evals/README.md).
 
@@ -217,7 +224,7 @@ requirements.md (+ openapi) ─▶ generation agent ─schema + coverage gate─
 | `web/` | Next.js dashboard |
 
 Stack: Python 3.11+, FastAPI, Pydantic, the Anthropic SDK (`claude-opus-5-5`, adaptive thinking,
-server-side refusal fallback) or any OpenAI-compatible API (Gemini, Groq, OpenRouter), httpx,
+server-side refusal fallback) or any OpenAI-compatible API (Gemini, Groq, OpenRouter, GitHub Models), httpx,
 jsonschema, Playwright, SQLite, Next.js 16 with Radix, cmdk and Lucide, Docker, GitHub Actions.
 
 ## Design notes
@@ -233,12 +240,21 @@ The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices
   `coverage_json` per requirement set. Older databases are migrated in place.
 - **Eval set:** 20 injected bugs against one requirements doc, plus a labelled triage set. The
   detection rate excludes bugs masked by the sandbox's own defects.
-- **SQLite only:** one service, with a Render disk for history.
+- **SQLite only:** one service. The live demo runs on Render's free plan without a disk, so its
+  history resets on deploy; a paid instance with a disk keeps it.
 
 ## Tests
 
-`pytest` runs 94 offline tests in CI: scripted fake model clients (Claude and OpenAI-compatible), mocked HTTP, a local fake
-booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1. No
-network and no API key needed.
+`pytest` runs 101 offline tests in CI: scripted fake model clients (Claude and
+OpenAI-compatible), mocked HTTP, a local fake booking API for the eval harness, real headless
+Chromium against a page on 127.0.0.1, and security checks (headers, token, injection attempts,
+CSV formulas, the browser allowlist). No network and no API key needed.
+
+## Security
+
+Write endpoints need a token on a public deployment, model output is schema-checked before it is
+stored, every request the runner or the browser makes is held to an allowlist, and CSV exports
+can't carry spreadsheet formulas. Details and how to report a vulnerability:
+[`SECURITY.md`](SECURITY.md).
 
 MIT licensed.

@@ -38,6 +38,7 @@ ENV UATPILOT_STATIC_DIR=/app/static \
     UATPILOT_DB=/data/uatpilot.db \
     UATPILOT_ARTIFACTS=/data/artifacts \
     UATPILOT_ENGINE=auto \
+    UATPILOT_ALLOWED_HOSTS=restful-booker.herokuapp.com,www.saucedemo.com \
     PORT=8000
 EXPOSE 8000
 

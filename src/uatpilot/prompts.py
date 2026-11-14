@@ -35,7 +35,12 @@ behaviour-specific assertions: it catches renamed, missing and mistyped fields e
 - UI cases start with a goto step and must contain at least one expect_* step.
 - Only use credentials, tokens or test accounts that are written in the requirements document.
 - Never write a check that would pass whatever the system does (e.g. asserting a field exists \
-when the criterion is about its value).
+when the criterion is about its value). When a criterion says a result includes a specific \
+item (a search or filter returning the booking you just created), capture that item's id and \
+assert the result contains it, not just that the result is non-empty. expect_url is a \
+"contains" check, so use a path only the expected page has, never the site root.
+- Create the data a case depends on; don't rely on shared records such as id 1 on a public \
+sandbox, which other users can change or delete.
 - Each case's `steps` (plain English) and `expected_result` are what a business reviewer reads: \
 write them as a human tester would, without JSON paths or selectors.
 """

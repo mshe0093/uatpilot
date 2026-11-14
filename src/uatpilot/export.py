@@ -175,6 +175,14 @@ def to_junit(store: Store, set_id: str) -> str:
     return ET.tostring(suite, encoding="unicode", xml_declaration=True)
 
 
+def _cell(value: Any) -> Any:
+    """Neutralise spreadsheet formulas (OWASP CSV injection): titles and explanations come from a
+    model or a user, and a cell starting with = + - @ (or a tab/CR) runs as a formula in Excel."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
 def to_csv(store: Store, set_id: str) -> str:
     cases = store.test_cases(set_id)
     _, runs = _latest(store, set_id)
@@ -200,18 +208,21 @@ def to_csv(store: Store, set_id: str) -> str:
         r = runs.get(c.id) or {}
         w.writerow(
             [
-                c.id,
-                c.requirement_ref,
-                c.title,
-                c.priority.value,
-                "; ".join(c.preconditions),
-                " / ".join(f"{i}. {s}" for i, s in enumerate(c.steps, 1)),
-                c.expected_result,
-                r.get("status", "not_run"),
-                r.get("change", ""),
-                r.get("triage_label") or "",
-                r.get("triage_explanation") or "",
-                r.get("run_at") or "",
+                _cell(v)
+                for v in [
+                    c.id,
+                    c.requirement_ref,
+                    c.title,
+                    c.priority.value,
+                    "; ".join(c.preconditions),
+                    " / ".join(f"{i}. {s}" for i, s in enumerate(c.steps, 1)),
+                    c.expected_result,
+                    r.get("status", "not_run"),
+                    r.get("change", ""),
+                    r.get("triage_label") or "",
+                    r.get("triage_explanation") or "",
+                    r.get("run_at") or "",
+                ]
             ]
         )
     return buf.getvalue()

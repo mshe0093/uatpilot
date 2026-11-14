@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from uatpilot.config import Settings, get_settings
 from uatpilot.llm import Event, Tool, ToolLoop, ToolOutcome
-from uatpilot.models import TargetKind, TestSuite, UiStep, suite_json_schema
+from uatpilot.models import TargetKind, TestSuite, UiAction, UiStep, suite_json_schema
 from uatpilot.prompts import GENERATION_NUDGE, GENERATION_SYSTEM
 from uatpilot.requirements import coverage, coverage_problems, extract_criteria
 from uatpilot.runner.ui import inspect_page
@@ -100,6 +100,14 @@ class Generator:
                 f"kind: {wrong[:5]}. Resubmit with executable.kind = '{self.target_kind.value}'.",
                 is_error=True,
             )
+        if vacuous := self._vacuous_url_checks(suite):
+            return ToolOutcome(
+                "These expect_url steps would pass on every page of the site, because every URL "
+                f"there contains the value: {vacuous[:5]}. Use a value that only the expected "
+                "page's URL contains (a path such as '/inventory.html'), or check an element that "
+                "only that page has.",
+                is_error=True,
+            )
         # Coverage gate (qodo-cover gates generated tests on code coverage; for UAT the unit is
         # the acceptance criterion): every criterion is covered or explicitly declared not.
         report = coverage(self.criteria, suite)
@@ -107,6 +115,20 @@ class Generator:
             return ToolOutcome(problems, is_error=True)
         self.coverage = report
         return ToolOutcome(f"Accepted {len(suite.test_cases)} test cases.", accepted=suite)
+
+    def _vacuous_url_checks(self, suite: TestSuite) -> list[str]:
+        """expect_url is a 'contains' check, so a value like the site root matches every page.
+        Seen in review: a logout case checked for 'https://www.saucedemo.com/', which the
+        products page URL also contains, so the case could never fail."""
+        root = self.base_url.rstrip("/") + "/"
+        found = []
+        for case in suite.test_cases:
+            ui = case.executable if case.target_kind is TargetKind.UI else None
+            for step in getattr(ui, "steps", []):
+                value = (step.value or "").strip()
+                if step.action is UiAction.EXPECT_URL and (not value or value in root):
+                    found.append(f"{case.title}: {value!r}")
+        return found
 
     def _tools(self) -> list[Tool]:
         tools = [
