@@ -50,7 +50,8 @@ change to the system, or its recent history alternates between pass and fail.
 - environment_issue: the failure came from the environment, not from the behaviour under test: \
 5xx server errors, timeouts, connection failures, rate limiting (429), expired auth.
 - test_defect: the test itself is broken (an unresolved {{variable}}, an assertion that could \
-not be evaluated, an invalid selector), so it says nothing about the system.
+not be evaluated, an invalid selector, expected text glued together from separate page \
+elements), so it says nothing about the system.
 
 You get the test case, the evidence from the failing run (requests, responses, assertion \
 results, or the failing UI step), the result of an immediate re-run, the case's previous \

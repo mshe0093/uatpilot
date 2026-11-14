@@ -93,14 +93,28 @@ regressions with evidence. The Sauce Demo suite passes 13/13 for the standard ac
 | Suite | Triage | Injected bugs detected | Triage accuracy | Failed runs shown as pass |
 |---|---|---|---|---|
 | Hand-written seed suite (Restful-Booker, 16 cases) | rules | **18/18** (2 more masked by sandbox defects) | **15/15** | 0 |
-| Agent-generated suite | Claude | *not measured yet* | *not measured yet* | |
+| Agent-generated suite (Gemini 3.5 Flash, Restful-Booker, 17 cases) | Gemini 3.1 Flash-Lite | **20/20** (0 masked) | **15/15** | 0 |
 
 **Read the first row for what it is.** The same person wrote the seed suite and the injected bugs,
 so a 100% detection rate there shows that the runner, proxy and floor work end to end. It says
-nothing about how good the *agent's* test cases are. The second row is the number that matters,
-and it needs an API key: `uatpilot generate ...` followed by `uatpilot eval <new-set-id>`. The
-two masked bugs (`put_ignores_update`, `delete_is_noop`) break criteria that the real sandbox
-already fails, so they can't be measured either way.
+nothing about how good the *agent's* test cases are.
+
+**The second row is the agent's own suite**, written by Gemini from the requirements alone (it
+never saw the mutation catalogue) on the free tier. It caught every injected bug, and the model
+triaged all 15 labelled failures correctly. Two honest caveats:
+
+- Against the real sandbox it surfaced **4 of the 6 known defects**; the seed suite surfaces all 6.
+  The agent's cases don't pin down the `DELETE` status code or the `PUT` field drop as strictly.
+  That looser checking is also why nothing was masked: those two mutations stay measurable.
+- The bugs are injected at the HTTP layer by the same author who wrote the requirements, so this
+  measures "does the suite exercise each criterion", not adversarial robustness.
+
+On Sauce Demo (UI, Playwright) a Gemini Flash-Lite suite passes 12 of 13. The one failure is a
+broken assertion, not an app bug, and is triaged `test_defect`. Two things this live run exposed
+are now fixed: the coverage gate accepted a suite that excused 9 of 13 criteria with boilerplate
+(at most a quarter may now be excused), and the triage first called that broken assertion a
+regression (expected text glued across separate page elements is now a detected test-defect
+signal).
 
 Method, caveats and per-bug results: [`evals/README.md`](evals/README.md).
 
@@ -133,14 +147,17 @@ provider is picked from whichever key is present:
 
 | Provider | Key | Default model | Cost |
 |---|---|---|---|
-| Google Gemini | `GEMINI_API_KEY` ([get one](https://aistudio.google.com/apikey)) | `gemini-2.5-flash` | free tier |
+| Google Gemini | `GEMINI_API_KEY` ([get one](https://aistudio.google.com/apikey)) | `gemini-3.5-flash` | free tier |
 | Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | free tier |
 | OpenRouter | `OPENROUTER_API_KEY` | a `:free` Llama model | free tier |
 | GitHub Models | your `gh` login (or `GITHUB_TOKEN`), with `UATPILOT_PROVIDER=github` | `openai/gpt-4.1` | free tier |
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-opus-5-5` | paid |
 
-Free tiers are rate limited, and Google may use free-tier prompts to improve its models, so only
-point it at sandbox data. Every model's output still goes through the same strict schema and the
+Free tiers are rate limited (Gemini's free tier allowed 20 requests a day for `gemini-3.5-flash`
+when this was written; Flash-Lite has its own, larger quota, so `UATPILOT_MODEL=gemini-3.1-flash-lite`
+is a good choice for runs and evals). After the first quota error a run switches to rules triage
+instead of retrying. Google may use free-tier prompts to improve its models, so only point it at
+sandbox data. Every model's output still goes through the same strict schema and the
 same triage floor.
 
 Check the setup with `uatpilot doctor`: it makes one small tool call and says whether the
@@ -218,7 +235,7 @@ The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices
 
 ## Tests
 
-`pytest` runs 90 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
+`pytest` runs 94 offline tests in CI: a scripted fake Claude client, mocked HTTP, a local fake
 booking API for the eval harness, and real headless Chromium against a page on 127.0.0.1. No
 network and no API key needed.
 

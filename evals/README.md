@@ -40,11 +40,13 @@ of 20 bugs, each tagged with the acceptance criterion it breaks, is in
 
 ## Status and caveats
 
-- **The suite measured so far is the hand-written seed suite** (`examples/suites/
-  restful-booker.seed.json`), not an agent-written one: no API key was available while building.
-  Those numbers test the runner, proxy and triage. They say nothing about the generation agent.
-  Run `uatpilot generate ... ` and then `uatpilot eval` on the new set for the agent's numbers.
-- **The triage numbers so far use the rules engine**, not Claude, for the same reason.
+- **Two suites are measured.** The hand-written seed suite (`examples/suites/
+  restful-booker.seed.json`, rules triage) tests the runner, proxy and triage plumbing. The
+  agent-written suite (`results/gemini/`, written by `gemini-3.5-flash`, triaged by
+  `gemini-3.1-flash-lite`) is the one that says something about the generation agent: 20/20
+  detection, 15/15 triage. Its cases are looser on two criteria the real sandbox already fails,
+  so 0 mutations were masked for it (2 for the seed suite).
+- Generation quality as a human reviewer would judge it (metric 4) is still not measured.
 - **One triage rule was changed after a smoke run.** The first rule labelled any reproduced 5xx a
   defect, which mislabelled the `env_503` scenario. It now treats 502/503/504 as environment even
   when they repeat, and a reproduced plain 500 as a defect. That change was made after seeing eval

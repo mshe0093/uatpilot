@@ -31,6 +31,16 @@ def _require() -> None:
         )
 
 
+SPLIT_TEXT = "every expected word is on the page, in order, but not as one contiguous string"
+
+
+def words_in_order(expected: str, text: str) -> bool:
+    """True when the expected text's words all appear in `text` in order, with other content in
+    between: the assertion glued separate elements together, so the test is wrong, not the app."""
+    want, have = expected.split(), iter(text.split())
+    return len(want) > 1 and all(any(w == h for h in have) for w in want)
+
+
 def _do(page: Any, step: UiStep, base_url: str, settings: Settings) -> str | None:
     """Perform one step. Returns None on success or a failure message for an expect_* step."""
     t = settings.ui_timeout_ms
@@ -66,7 +76,10 @@ def _do(page: Any, step: UiStep, base_url: str, settings: Settings) -> str | Non
                     if (step.value or "") in text:
                         return None
                 page.wait_for_timeout(200)
-            return f"expected {step.selector!r} text to contain {step.value!r}, got {text[:200]!r}"
+            msg = f"expected {step.selector!r} text to contain {step.value!r}, got {text[:200]!r}"
+            if words_in_order(step.value or "", text):
+                msg += f" [{SPLIT_TEXT}]"
+            return msg
         case UiAction.EXPECT_URL:
             deadline = time.monotonic() + t / 1000
             while time.monotonic() < deadline:

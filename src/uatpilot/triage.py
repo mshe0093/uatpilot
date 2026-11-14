@@ -9,7 +9,8 @@ evidence supports:
   * "environment_issue" only if the evidence contains an environment signal (5xx, timeout,
     connection failure, 429, auth expiry);
   * "test_defect" only if the evidence contains a test-defect signal (an unresolved {{variable}},
-    an assertion that could not be evaluated, an invalid selector);
+    an assertion that could not be evaluated, an invalid selector, expected text glued together
+    from separate elements);
   * anything else becomes "real_regression", with `floor_applied` recording what was claimed.
 """
 
@@ -24,9 +25,10 @@ from typing import Any
 from pydantic import ValidationError
 
 from uatpilot.config import Settings, get_settings
-from uatpilot.llm import AgentError, Event, Tool, ToolLoop, ToolOutcome
+from uatpilot.llm import AgentError, Event, RateLimited, Tool, ToolLoop, ToolOutcome
 from uatpilot.models import TestCase, Triage, TriageDecision, TriageLabel
 from uatpilot.prompts import TRIAGE_NUDGE, TRIAGE_SYSTEM
+from uatpilot.runner.ui import SPLIT_TEXT
 from uatpilot.target import probe
 
 
@@ -74,6 +76,8 @@ def broken_test_signals(evidence: dict[str, Any]) -> list[str]:
         for a in step.get("assertions", []):
             if a.get("error"):
                 signals.append(f"{name}: assertion could not be evaluated ({a['error'][:100]})")
+        if SPLIT_TEXT in str(step.get("failure", "")):
+            signals.append(f"{name}: expected text is split across elements ({SPLIT_TEXT})")
         err = step.get("error") or {}
         if err.get("kind") == "browser" and _BAD_SELECTOR.search(str(err.get("detail", ""))):
             signals.append(f"{name}: invalid selector ({str(err['detail'])[:100]})")
@@ -247,6 +251,7 @@ class TriageAgent:
         self.base_url = base_url
         self.client = client
         self._health_checked = False
+        self.unavailable: str | None = None  # set on a quota error; rules take over for the batch
 
     def _health(self, _args: dict[str, Any]) -> ToolOutcome:
         if self._health_checked:
@@ -343,10 +348,16 @@ def triage_or_fallback(
     if reused := reuse_triage(previous, signals):
         yield {"type": "triage", "triage": reused}
         return
-    if agent is not None:
+    if agent is not None and agent.unavailable is None:
         try:
             yield from agent.triage(case, evidence, rerun, signals)
             return
+        except RateLimited as exc:
+            agent.unavailable = str(exc)
+            yield {
+                "type": "warning",
+                "message": f"Triage agent unavailable ({exc}); rules triage the rest of this run.",
+            }
         except AgentError as exc:
             yield {"type": "warning", "message": f"Triage agent unavailable ({exc}); used rules."}
     yield {"type": "triage", "triage": rules_triage(evidence, signals)}

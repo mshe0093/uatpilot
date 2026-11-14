@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "uatpilot"
-version = "0.3.0"
+version = "0.3.1"
 description = "Turns a requirements doc into structured UAT test cases, runs them against a real target, triages failures and reports the results on a dashboard."
 readme = "README.md"
 license = { text = "MIT" }

@@ -3,6 +3,24 @@
 All notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-11-14
+
+### Added
+- First live agent numbers: a Gemini-written Restful-Booker suite catches 20/20 injected bugs with
+  15/15 model triage (`evals/results/gemini/`).
+- Test-defect signal: a UI text assertion whose words are all on the page, in order, but split
+  across elements.
+
+### Changed
+- Default Gemini model is `gemini-3.5-flash` (2.5 is closed to new keys).
+- Coverage gate: at most a quarter of the acceptance criteria may be declared not coverable.
+- A quota error switches the rest of a run to rules triage instead of retrying every failure.
+
+### Fixed
+- Gemini 3 tool calls: the thought signature on each call is sent back, which the API requires
+  (it returned 400 on the second turn).
+- Provider errors show the provider's message, not just the status code.
+
 ## [0.3.0] - 2026-11-14
 
 ### Added

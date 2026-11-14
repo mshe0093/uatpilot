@@ -41,8 +41,24 @@ def coverage(criteria: list[str], suite: TestSuite) -> dict[str, Any]:
     }
 
 
+# not_covered is for criteria the target can't exercise (an email inbox, an admin console), not a
+# way out of hard ones. A weak model will otherwise excuse most of a document with boilerplate
+# ("prone to environmental changes"), and an unbounded escape hatch makes the gate meaningless.
+MAX_EXCUSED_SHARE = 0.25
+
+
 def coverage_problems(report: dict[str, Any]) -> str | None:
     lines = []
+    excused, total = list(report["not_covered"]), len(report["criteria"])
+    allowed = max(1, int(total * MAX_EXCUSED_SHARE))
+    if len(excused) > allowed:
+        lines.append(
+            f"You declared {len(excused)} of {total} acceptance criteria not coverable; at most "
+            f"{allowed} may be. not_covered is only for criteria the target cannot exercise at "
+            "all (for example an email inbox or an admin console). Write test cases for: "
+            + ", ".join(excused)
+            + ". Keep not_covered for the genuinely untestable ones."
+        )
     if report["missing"]:
         lines.append(
             "These acceptance criteria have no test case and are not listed in not_covered: "
