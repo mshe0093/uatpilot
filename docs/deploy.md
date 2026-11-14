@@ -6,9 +6,10 @@ One Docker image serves the API, the static dashboard, and a headless Chromium f
 
 1. Push the repo to GitHub.
 2. Render dashboard → **New → Blueprint** → pick the repo. `render.yaml` creates one web service
-   with a 1 GB disk mounted at `/data` (the SQLite run history and failure screenshots live there).
-   A persistent disk needs a paid instance; on the free plan, drop the `disk:` block and accept
-   that history resets on every deploy (the two seed suites are re-imported on start).
+   on the free plan. The free plan has no persistent disk, so the SQLite run history resets on
+   every deploy or restart (the two seed suites are re-imported on start), and the service sleeps
+   after 15 idle minutes (the first visit then takes about a minute). For lasting history switch
+   to `plan: starter` and add the disk shown in the file's comment.
 3. In the service's **Environment** tab set:
    - `UATPILOT_WRITE_TOKEN`: a long random string. With it set, visitors see a read-only
      dashboard; you paste the token into the dashboard's token box to run suites.

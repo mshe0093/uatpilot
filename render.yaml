@@ -4,15 +4,14 @@ services:
   - type: web
     name: uatpilot
     runtime: docker
-    plan: starter # a persistent disk (for the SQLite run history) needs a paid instance
+    # Free plan: no persistent disk, so run history resets on each deploy or restart (the seed
+    # suites are re-imported on start). For lasting history use plan: starter and add
+    #   disk: {name: uatpilot-data, mountPath: /data, sizeGB: 1}
+    plan: free
     region: singapore
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     autoDeploy: true
-    disk:
-      name: uatpilot-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       # auto = the model when a provider key is set, the deterministic rules triage otherwise.
       - key: UATPILOT_ENGINE
