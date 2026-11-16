@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -78,11 +79,37 @@ class Store:
         self.path = Path(path)
         if str(self.path) != ":memory:":
             self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA foreign_keys = ON")
-        self._conn.executescript(SCHEMA)
+        # One connection per thread. FastAPI runs sync endpoints (and streams) on a thread pool,
+        # and a single SQLite connection shared across threads fails under overlapping requests
+        # (sqlite3.InterfaceError). An in-memory database exists only inside its connection, so
+        # it keeps one shared connection behind a lock instead.
+        self._memory = str(self.path) == ":memory:"
+        self._local = threading.local()
+        self._shared: sqlite3.Connection | None = None
+        self._lock = threading.RLock()
+        conn = self._conn
+        if not self._memory:
+            conn.execute("PRAGMA journal_mode = WAL")  # readers don't block the writer
+        conn.executescript(SCHEMA)
         self._migrate()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self.path), check_same_thread=False, timeout=30)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        if self._memory:
+            with self._lock:
+                if self._shared is None:
+                    self._shared = self._connect()
+            return self._shared
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = self._local.conn = self._connect()
+        return conn
 
     def _migrate(self) -> None:
         """Additive, idempotent column migrations for databases created by older versions."""

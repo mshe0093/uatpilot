@@ -19,7 +19,7 @@ from rich.table import Table
 
 from uatpilot.config import get_settings, has_llm_credentials, load_dotenv
 from uatpilot.db import Store
-from uatpilot.export import to_csv, to_junit, to_markdown
+from uatpilot.export import to_csv, to_junit, to_markdown, to_seed
 from uatpilot.llm import AgentError
 from uatpilot.models import TargetKind, TestSuite
 from uatpilot.pipeline import run_suite
@@ -112,7 +112,9 @@ def _load_spec(source: str, settings) -> str:
 def import_suite(path: Annotated[Path, typer.Argument(exists=True, readable=True)]) -> None:
     """Import a hand-written suite JSON (see examples/suites). No model call."""
     doc = json.loads(path.read_text(encoding="utf-8"))
-    suite = TestSuite.model_validate({"test_cases": doc["test_cases"]})
+    suite = TestSuite.model_validate(
+        {"test_cases": doc["test_cases"], "not_covered": doc.get("not_covered", [])}
+    )
     req_path = path.parent / doc["requirements"]
     raw = req_path.read_text(encoding="utf-8")
     report = coverage(extract_criteria(raw), suite)
@@ -122,7 +124,8 @@ def import_suite(path: Annotated[Path, typer.Argument(exists=True, readable=True
         raw_text=raw,
         target_kind=doc["target_kind"],
         base_url=doc["base_url"],
-        generated_by=f"import:{path.name}",
+        # A seed exported from a generated suite keeps its author (e.g. "gemini:gemini-3.5-flash").
+        generated_by=doc.get("generated_by") or f"import:{path.name}",
         drafts=suite.test_cases,
         coverage=report,
     )
@@ -193,13 +196,14 @@ def list_sets() -> None:
 @app.command()
 def export(
     set_id: str,
-    format: Annotated[str, typer.Option(help="md, csv or junit")] = "md",
+    format: Annotated[str, typer.Option(help="md, csv, junit or seed")] = "md",
     out: Annotated[Path | None, typer.Option(help="Write to a file instead of stdout.")] = None,
 ) -> None:
-    """Export the UAT sign-off document (Markdown), a CSV, or JUnit XML for CI tools."""
-    writers = {"md": to_markdown, "csv": to_csv, "junit": to_junit}
+    """Export the UAT sign-off document (Markdown), a CSV, JUnit XML for CI tools, or the suite
+    as a seed file that `uatpilot import` (and the Docker image) can load."""
+    writers = {"md": to_markdown, "csv": to_csv, "junit": to_junit, "seed": to_seed}
     if format not in writers:
-        raise typer.BadParameter("format must be md, csv or junit")
+        raise typer.BadParameter("format must be md, csv, junit or seed")
     text = writers[format](_store(), set_id)
     if out:
         out.write_text(text, encoding="utf-8")
