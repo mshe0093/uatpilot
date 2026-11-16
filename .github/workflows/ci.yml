@@ -60,7 +60,7 @@ jobs:
           docker run -d --name app -p 8000:8000 -e UATPILOT_ENGINE=rules uatpilot:ci
           for i in $(seq 1 40); do curl -fs http://127.0.0.1:8000/api/health && break; sleep 1; done
           curl -fs http://127.0.0.1:8000/ | grep -q "UATPilot"
-          test "$(curl -fs http://127.0.0.1:8000/api/requirement-sets | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')" = "2"
+          test "$(curl -fs http://127.0.0.1:8000/api/requirement-sets | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')" = "$(ls examples/suites/*.seed.json | wc -l | tr -d ' ')"
           ID=$(curl -fs http://127.0.0.1:8000/api/requirement-sets | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')
           curl -fs "http://127.0.0.1:8000/api/requirement-sets/$ID/export.md" | grep -q "UAT Sign-off"
           docker exec app python -c "from playwright.sync_api import sync_playwright as p; b=p().start().chromium.launch(); b.close()"
