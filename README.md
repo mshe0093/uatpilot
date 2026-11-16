@@ -97,6 +97,7 @@ regressions with evidence. The Sauce Demo suite passes 13/13 for the standard ac
 |---|---|---|---|---|
 | Hand-written seed suite (Restful-Booker, 16 cases) | rules | **18/18** (2 more masked by sandbox defects) | **15/15** | 0 |
 | Agent-generated suite (Gemini 3.5 Flash, Restful-Booker, 17 cases) | Gemini 3.1 Flash-Lite | **20/20** (0 masked) | **15/15** | 0 |
+| Agent-generated, regenerated after the review fixes (Gemini 3.5 Flash, 17 cases) | rules | **19/20** (0 masked) | **15/15** | 0 |
 
 **Read the first row for what it is.** The same person wrote the seed suite and the injected bugs,
 so a 100% detection rate there shows that the runner, proxy and floor work end to end. It says
@@ -122,8 +123,12 @@ signal).
 **Would a QA reviewer accept the agent's cases as written?** 18 of the 30 (60%); 9 need a minor
 edit (a check the criterion names is missing, or the case leans on shared sandbox data) and 3 need
 rework. The review was done by an AI model at the owner's request, not an independent human, so
-treat it as an estimate. Two of the three rework flaws are now caught automatically. Per-case
-verdicts: [`evals/review-gemini-suites.md`](evals/review-gemini-suites.md).
+treat it as an estimate. After fixes to the generator, both suites were regenerated and reviewed
+again: 18 of 28 accepted (64%) and **no case needing rework**. Detection on the new API suite was
+19/20; the miss traces to a check the review had already marked as too loose. Per-case verdicts
+and the before/after: [`evals/review-gemini-suites.md`](evals/review-gemini-suites.md). Both
+regenerated suites ship with the demo (`examples/suites/*.gemini.seed.json`), so the live
+dashboard shows the agent's own, unedited output next to the hand-written suites.
 
 Method, caveats and per-bug results: [`evals/README.md`](evals/README.md).
 
@@ -138,7 +143,7 @@ uatpilot import examples/suites/restful-booker.seed.json   # hand-written fixtur
 uatpilot import examples/suites/saucedemo.seed.json
 uatpilot list
 uatpilot run <requirement-set-id>                      # real runs against the sandbox
-uatpilot export <requirement-set-id> --out signoff.md  # sign-off doc (also --format csv|junit)
+uatpilot export <requirement-set-id> --out signoff.md  # sign-off doc (also --format csv|junit|seed)
 
 # with a model key in .env (free: GEMINI_API_KEY, see below): write a suite from a requirements doc
 uatpilot generate examples/requirements/restful-booker.md \
@@ -245,7 +250,7 @@ The original design is in [`docs/DESIGN.md`](docs/DESIGN.md). Deliberate choices
 
 ## Tests
 
-`pytest` runs 101 offline tests in CI: scripted fake model clients (Claude and
+`pytest` runs 106 offline tests in CI: scripted fake model clients (Claude and
 OpenAI-compatible), mocked HTTP, a local fake booking API for the eval harness, real headless
 Chromium against a page on 127.0.0.1, and security checks (headers, token, injection attempts,
 CSV formulas, the browser allowlist). No network and no API key needed.

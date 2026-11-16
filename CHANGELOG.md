@@ -3,6 +3,31 @@
 All notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.3] - 2026-11-16
+
+### Added
+- `uatpilot export --format seed` writes a suite in the format `uatpilot import` reads, keeping
+  who wrote it and which criteria were declared not coverable.
+- The demo ships two Gemini-written suites (`examples/suites/*.gemini.seed.json`), regenerated
+  after the review fixes, next to the hand-written ones.
+- Second-round review: 18 of 28 regenerated cases accepted, none needing rework; the regenerated
+  API suite detects 19/20 injected bugs (`evals/results/gemini-v2/`).
+
+### Changed
+- `uatpilot import` keeps a seed's `generated_by` and `not_covered`.
+- The sidebar, phone picker and command menu show who wrote each suite (hand-written or the
+  model), so two suites for the same document can be told apart.
+- The verdict no longer says "all criteria pass" when some were declared not automatable: it says
+  automated checks pass and names how many criteria need a manual test.
+
+### Fixed
+- Overlapping requests could fail with `sqlite3.InterfaceError` (HTTP 500) because one SQLite
+  connection was shared across the server's threads. The store now opens one connection per
+  thread, with WAL so reads don't wait for writes. `tests/test_concurrency.py` reproduces the
+  failure.
+- Switching suites quickly could show the previous suite's data under the new suite's name; only
+  the latest load now updates the page.
+
 ## [0.3.2] - 2026-11-14
 
 ### Added

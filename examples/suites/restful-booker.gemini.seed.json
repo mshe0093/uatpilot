@@ -1,0 +1,1602 @@
+{
+  "requirements": "../requirements/restful-booker.md",
+  "target_kind": "api",
+  "base_url": "https://restful-booker.herokuapp.com",
+  "generated_by": "gemini:gemini-3.5-flash",
+  "note": "Written by gemini:gemini-3.5-flash from the requirements document, unedited.",
+  "test_cases": [
+    {
+      "title": "Verify health check endpoint returns 2xx status code",
+      "requirement_ref": "AC-1.1",
+      "preconditions": [],
+      "steps": [
+        "Send a GET request to /ping",
+        "Verify the HTTP status code is in the 2xx range"
+      ],
+      "expected_result": "API responds with a 2xx success status code indicating service health.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "GET /ping health check",
+            "method": "GET",
+            "path": "/ping",
+            "headers": [],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "greater_than",
+                "expected": 199,
+                "json_schema": null
+              },
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "less_than",
+                "expected": 300,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Create a booking with valid complete data",
+      "requirement_ref": "AC-2.1",
+      "preconditions": [],
+      "steps": [
+        "Send a POST request to /booking with full valid JSON payload",
+        "Verify HTTP status is 200 OK",
+        "Verify response body contains numeric bookingid and identical booking details"
+      ],
+      "expected_result": "Booking is created successfully with 200 status code, returning a numeric bookingid and echoing all fields.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking with complete details",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "Jane",
+              "lastname": "Doe",
+              "totalprice": 200,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-05-10",
+                "checkout": "2026-05-15"
+              },
+              "additionalneeds": "Breakfast"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "bookingid",
+                "op": "exists",
+                "expected": null,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "booking.firstname",
+                "op": "equals",
+                "expected": "Jane",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "booking.lastname",
+                "op": "equals",
+                "expected": "Doe",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "booking.totalprice",
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "booking.depositpaid",
+                "op": "equals",
+                "expected": true,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "booking.bookingdates.checkin",
+                "op": "equals",
+                "expected": "2026-05-10",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "booking.bookingdates.checkout",
+                "op": "equals",
+                "expected": "2026-05-15",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "booking.additionalneeds",
+                "op": "equals",
+                "expected": "Breakfast",
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "created_booking_id",
+                "value": "bookingid"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Fetch newly created booking by ID",
+      "requirement_ref": "AC-2.2",
+      "preconditions": [],
+      "steps": [
+        "Create a booking via POST /booking",
+        "Send GET request to /booking/{bookingid} using the created booking ID",
+        "Verify response status is 200 OK and fields match created data"
+      ],
+      "expected_result": "GET request returns 200 status code with exact guest name, price, and dates matching the created booking.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking for AC-2.2 test",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "Robert",
+              "lastname": "Smith",
+              "totalprice": 150,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-06-01",
+                "checkout": "2026-06-05"
+              },
+              "additionalneeds": "Lunch"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac22_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "Fetch booking by created ID",
+            "method": "GET",
+            "path": "/booking/{{ac22_id}}",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "firstname",
+                "op": "equals",
+                "expected": "Robert",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "lastname",
+                "op": "equals",
+                "expected": "Smith",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "totalprice",
+                "op": "equals",
+                "expected": 150,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "bookingdates.checkin",
+                "op": "equals",
+                "expected": "2026-06-01",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "bookingdates.checkout",
+                "op": "equals",
+                "expected": "2026-06-05",
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Reject booking creation with missing required fields",
+      "requirement_ref": "AC-2.3",
+      "preconditions": [],
+      "steps": [
+        "Send POST request to /booking containing only firstname field",
+        "Verify API returns 400 Bad Request"
+      ],
+      "expected_result": "API rejects request with 400 Bad Request status code.",
+      "priority": "medium",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking missing required fields",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "IncompleteOnly"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 400,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Reject booking creation with negative total price",
+      "requirement_ref": "AC-2.4",
+      "preconditions": [],
+      "steps": [
+        "Send POST request to /booking with totalprice set to -100",
+        "Verify API returns 4xx status code"
+      ],
+      "expected_result": "API rejects request with a 4xx error status code.",
+      "priority": "medium",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking with negative totalprice",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "Negative",
+              "lastname": "Price",
+              "totalprice": -100,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-07-01",
+                "checkout": "2026-07-05"
+              },
+              "additionalneeds": "None"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "greater_than",
+                "expected": 399,
+                "json_schema": null
+              },
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "less_than",
+                "expected": 500,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Reject booking creation with checkout before checkin date",
+      "requirement_ref": "AC-2.5",
+      "preconditions": [],
+      "steps": [
+        "Send POST request to /booking with checkout date earlier than checkin date",
+        "Verify API returns 4xx status code"
+      ],
+      "expected_result": "API rejects request with a 4xx error status code due to invalid date range.",
+      "priority": "medium",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking with checkout before checkin",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "Invalid",
+              "lastname": "Dates",
+              "totalprice": 120,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-08-10",
+                "checkout": "2026-08-01"
+              },
+              "additionalneeds": "None"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "greater_than",
+                "expected": 399,
+                "json_schema": null
+              },
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "less_than",
+                "expected": 500,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Get all booking IDs list",
+      "requirement_ref": "AC-3.1",
+      "preconditions": [],
+      "steps": [
+        "Send GET request to /booking with Accept application/json header",
+        "Verify HTTP status is 200 OK",
+        "Verify response body is a JSON array containing objects with bookingid"
+      ],
+      "expected_result": "API responds with 200 OK and JSON array of objects each containing a bookingid.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Get all bookings",
+            "method": "GET",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "[0].bookingid",
+                "op": "exists",
+                "expected": null,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Filter bookings list by guest firstname and lastname",
+      "requirement_ref": "AC-3.2",
+      "preconditions": [],
+      "steps": [
+        "Create a booking with a unique guest firstname and lastname",
+        "Send GET request to /booking filtering by firstname and lastname",
+        "Verify response status is 200 OK and returned list contains created booking ID"
+      ],
+      "expected_result": "Filtered query returns 200 OK and contains the booking ID of the created booking.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking with unique guest name",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "UniqueSearchFirst",
+              "lastname": "UniqueSearchLast",
+              "totalprice": 199,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-09-01",
+                "checkout": "2026-09-05"
+              },
+              "additionalneeds": "Extra Pillows"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "search_booking_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "Filter bookings by guest firstname and lastname",
+            "method": "GET",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [
+              {
+                "name": "firstname",
+                "value": "UniqueSearchFirst"
+              },
+              {
+                "name": "lastname",
+                "value": "UniqueSearchLast"
+              }
+            ],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "body_text",
+                "path": null,
+                "op": "contains",
+                "expected": "{{search_booking_id}}",
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Request non-existent booking ID returns 404",
+      "requirement_ref": "AC-3.3",
+      "preconditions": [],
+      "steps": [
+        "Send GET request to /booking/999999999",
+        "Verify response status code is 404 Not Found"
+      ],
+      "expected_result": "API returns 404 Not Found.",
+      "priority": "medium",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Fetch booking with non-existent ID",
+            "method": "GET",
+            "path": "/booking/999999999",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 404,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Authenticate successfully with valid UAT credentials",
+      "requirement_ref": "AC-4.1",
+      "preconditions": [],
+      "steps": [
+        "Send POST request to /auth with valid credentials admin and password123",
+        "Verify response status code is 200 OK",
+        "Verify response contains non-empty token"
+      ],
+      "expected_result": "API responds with 200 OK and returns a non-empty token in JSON response.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Authenticate with valid credentials",
+            "method": "POST",
+            "path": "/auth",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "username": "admin",
+              "password": "password123"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "token",
+                "op": "exists",
+                "expected": null,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "token",
+                "op": "not_equals",
+                "expected": "",
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "auth_token",
+                "value": "token"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Authentication with incorrect password fails and returns no token",
+      "requirement_ref": "AC-4.2",
+      "preconditions": [],
+      "steps": [
+        "Send POST request to /auth with incorrect password",
+        "Verify response does not contain a token"
+      ],
+      "expected_result": "API does not return an authentication token.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Authenticate with invalid password",
+            "method": "POST",
+            "path": "/auth",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "username": "admin",
+              "password": "wrongpassword123"
+            },
+            "assertions": [
+              {
+                "source": "json",
+                "path": "token",
+                "op": "not_exists",
+                "expected": null,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Reject update or delete request without token",
+      "requirement_ref": "AC-4.3",
+      "preconditions": [],
+      "steps": [
+        "Create a test booking",
+        "Send PUT request to /booking/{id} without token header",
+        "Verify response status is 403 Forbidden",
+        "Send DELETE request to /booking/{id} without token header",
+        "Verify response status is 403 Forbidden"
+      ],
+      "expected_result": "Both PUT update and DELETE cancellation requests without token are rejected with 403 Forbidden.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking for unauthenticated modification test",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "Unauth",
+              "lastname": "Test",
+              "totalprice": 100,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-09-01",
+                "checkout": "2026-09-05"
+              },
+              "additionalneeds": "None"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac43_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "PUT update without auth token",
+            "method": "PUT",
+            "path": "/booking/{{ac43_id}}",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "Unauth",
+              "lastname": "Update",
+              "totalprice": 100,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-09-01",
+                "checkout": "2026-09-05"
+              },
+              "additionalneeds": "None"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 403,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          },
+          {
+            "name": "DELETE cancel without auth token",
+            "method": "DELETE",
+            "path": "/booking/{{ac43_id}}",
+            "headers": [],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 403,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Completely update booking with PUT using token",
+      "requirement_ref": "AC-5.1",
+      "preconditions": [],
+      "steps": [
+        "Authenticate to get auth token",
+        "Create a booking via POST /booking",
+        "Send PUT request to /booking/{id} with token Cookie and updated body",
+        "Verify PUT response is 200 OK with updated values",
+        "Send GET request to /booking/{id} and verify updated values persist"
+      ],
+      "expected_result": "PUT request replaces booking (200 OK) and subsequent GET returns all updated values.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Authenticate for PUT update",
+            "method": "POST",
+            "path": "/auth",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "username": "admin",
+              "password": "password123"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac51_token",
+                "value": "token"
+              }
+            ]
+          },
+          {
+            "name": "Create booking to be updated",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "OriginalName",
+              "lastname": "OriginalLast",
+              "totalprice": 200,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-10-01",
+                "checkout": "2026-10-05"
+              },
+              "additionalneeds": "Breakfast"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac51_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "PUT update booking with token",
+            "method": "PUT",
+            "path": "/booking/{{ac51_id}}",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              },
+              {
+                "name": "Cookie",
+                "value": "token={{ac51_token}}"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "UpdatedName",
+              "lastname": "UpdatedLast",
+              "totalprice": 450,
+              "depositpaid": false,
+              "bookingdates": {
+                "checkin": "2026-10-01",
+                "checkout": "2026-10-10"
+              },
+              "additionalneeds": "Late Checkout"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "firstname",
+                "op": "equals",
+                "expected": "UpdatedName",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "totalprice",
+                "op": "equals",
+                "expected": 450,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          },
+          {
+            "name": "Fetch booking to verify complete update",
+            "method": "GET",
+            "path": "/booking/{{ac51_id}}",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "firstname",
+                "op": "equals",
+                "expected": "UpdatedName",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "lastname",
+                "op": "equals",
+                "expected": "UpdatedLast",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "totalprice",
+                "op": "equals",
+                "expected": 450,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "depositpaid",
+                "op": "equals",
+                "expected": false,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "additionalneeds",
+                "op": "equals",
+                "expected": "Late Checkout",
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Partially update booking firstname with PATCH using token",
+      "requirement_ref": "AC-5.2",
+      "preconditions": [],
+      "steps": [
+        "Authenticate to get auth token",
+        "Create a booking with initial field values",
+        "Send PATCH request to /booking/{id} updating only firstname",
+        "Verify response is 200 OK with new firstname",
+        "Send GET request to /booking/{id} and verify only firstname changed while all other fields remained unchanged"
+      ],
+      "expected_result": "PATCH request updates firstname (200 OK) and subsequent GET verifies firstname changed while other fields remain unchanged.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Authenticate for PATCH update",
+            "method": "POST",
+            "path": "/auth",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "username": "admin",
+              "password": "password123"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac52_token",
+                "value": "token"
+              }
+            ]
+          },
+          {
+            "name": "Create booking for PATCH test",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "BeforePatch",
+              "lastname": "KeepOriginal",
+              "totalprice": 350,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-11-01",
+                "checkout": "2026-11-05"
+              },
+              "additionalneeds": "WiFi"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac52_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "PATCH booking firstname with token",
+            "method": "PATCH",
+            "path": "/booking/{{ac52_id}}",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              },
+              {
+                "name": "Cookie",
+                "value": "token={{ac52_token}}"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "AfterPatch"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "firstname",
+                "op": "equals",
+                "expected": "AfterPatch",
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          },
+          {
+            "name": "Fetch booking to verify partial update",
+            "method": "GET",
+            "path": "/booking/{{ac52_id}}",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "firstname",
+                "op": "equals",
+                "expected": "AfterPatch",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "lastname",
+                "op": "equals",
+                "expected": "KeepOriginal",
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "totalprice",
+                "op": "equals",
+                "expected": 350,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "depositpaid",
+                "op": "equals",
+                "expected": true,
+                "json_schema": null
+              },
+              {
+                "source": "json",
+                "path": "additionalneeds",
+                "op": "equals",
+                "expected": "WiFi",
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Cancel booking with DELETE using token",
+      "requirement_ref": "AC-6.1",
+      "preconditions": [],
+      "steps": [
+        "Authenticate to obtain auth token",
+        "Create a booking via POST /booking",
+        "Send DELETE request to /booking/{id} with Cookie token header",
+        "Verify API responds with a 2xx success status code"
+      ],
+      "expected_result": "DELETE request responds with a 2xx success status code.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Authenticate for DELETE test",
+            "method": "POST",
+            "path": "/auth",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "username": "admin",
+              "password": "password123"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac61_token",
+                "value": "token"
+              }
+            ]
+          },
+          {
+            "name": "Create booking to be deleted",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "DeleteMe",
+              "lastname": "User",
+              "totalprice": 100,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-12-01",
+                "checkout": "2026-12-05"
+              },
+              "additionalneeds": "None"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac61_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "DELETE booking with token",
+            "method": "DELETE",
+            "path": "/booking/{{ac61_id}}",
+            "headers": [
+              {
+                "name": "Cookie",
+                "value": "token={{ac61_token}}"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "greater_than",
+                "expected": 199,
+                "json_schema": null
+              },
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "less_than",
+                "expected": 300,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Fetch cancelled booking returns 404 Not Found",
+      "requirement_ref": "AC-6.2",
+      "preconditions": [],
+      "steps": [
+        "Authenticate to obtain auth token",
+        "Create a booking via POST /booking",
+        "Delete the booking via DELETE /booking/{id} with token Cookie",
+        "Send GET request to /booking/{id} for the cancelled booking",
+        "Verify response status is 404 Not Found"
+      ],
+      "expected_result": "Subsequent GET /booking/{id} returns 404 Not Found after cancellation.",
+      "priority": "high",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Authenticate for post-delete GET test",
+            "method": "POST",
+            "path": "/auth",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "username": "admin",
+              "password": "password123"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac62_token",
+                "value": "token"
+              }
+            ]
+          },
+          {
+            "name": "Create booking to delete and check",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "CheckDelete",
+              "lastname": "User",
+              "totalprice": 100,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2026-12-10",
+                "checkout": "2026-12-15"
+              },
+              "additionalneeds": "None"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "ac62_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "DELETE booking with token",
+            "method": "DELETE",
+            "path": "/booking/{{ac62_id}}",
+            "headers": [
+              {
+                "name": "Cookie",
+                "value": "token={{ac62_token}}"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "greater_than",
+                "expected": 199,
+                "json_schema": null
+              },
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "less_than",
+                "expected": 300,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          },
+          {
+            "name": "Fetch cancelled booking by ID",
+            "method": "GET",
+            "path": "/booking/{{ac62_id}}",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 404,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    },
+    {
+      "title": "Single booking read GET endpoint responds in under 3000 ms",
+      "requirement_ref": "NFR-1",
+      "preconditions": [],
+      "steps": [
+        "Create a booking via POST /booking",
+        "Send GET request to /booking/{id}",
+        "Verify response status is 200 OK and response elapsed time is under 3000 ms"
+      ],
+      "expected_result": "GET /booking/{id} responds in under 3000 ms.",
+      "priority": "medium",
+      "executable": {
+        "kind": "api",
+        "steps": [
+          {
+            "name": "Create booking for response time test",
+            "method": "POST",
+            "path": "/booking",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": {
+              "firstname": "Performance",
+              "lastname": "Tester",
+              "totalprice": 220,
+              "depositpaid": true,
+              "bookingdates": {
+                "checkin": "2027-01-01",
+                "checkout": "2027-01-05"
+              },
+              "additionalneeds": "Quiet room"
+            },
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              }
+            ],
+            "capture": [
+              {
+                "name": "nfr1_id",
+                "value": "bookingid"
+              }
+            ]
+          },
+          {
+            "name": "Fetch single booking and assert latency",
+            "method": "GET",
+            "path": "/booking/{{nfr1_id}}",
+            "headers": [
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "query": [],
+            "json_body": null,
+            "assertions": [
+              {
+                "source": "status_code",
+                "path": null,
+                "op": "equals",
+                "expected": 200,
+                "json_schema": null
+              },
+              {
+                "source": "elapsed_ms",
+                "path": null,
+                "op": "less_than",
+                "expected": 3000,
+                "json_schema": null
+              }
+            ],
+            "capture": []
+          }
+        ]
+      }
+    }
+  ],
+  "not_covered": []
+}

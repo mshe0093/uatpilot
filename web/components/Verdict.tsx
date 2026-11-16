@@ -7,6 +7,8 @@ export function Verdict({ detail, last }: { detail: RequirementSet; last?: Batch
   const failing = trace.filter((t) => t.result.startsWith("FAIL")).length;
   const missing = trace.filter((t) => t.result === "MISSING").length;
   const notRun = trace.filter((t) => t.result === "NOT RUN").length;
+  // Declared untestable by the generator: nothing ran, so a person has to check these by hand.
+  const manual = trace.filter((t) => t.result.startsWith("NOT COVERED")).length;
 
   let state: "ready" | "blocked" | "unknown";
   let headline: string;
@@ -25,6 +27,10 @@ export function Verdict({ detail, last }: { detail: RequirementSet; last?: Batch
     detailLine = missing
       ? `${missing} acceptance ${missing === 1 ? "criterion has" : "criteria have"} no test case.`
       : `${notRun} criteria haven’t been run since their cases changed.`;
+  } else if (manual > 0) {
+    state = "unknown";
+    headline = "Automated checks pass. Manual checks remain.";
+    detailLine = `${trace.length - manual} of ${trace.length} acceptance criteria pass; ${manual} ${manual === 1 ? "was" : "were"} declared not automatable and need a person to test ${manual === 1 ? "it" : "them"} before sign-off.`;
   } else {
     state = "ready";
     headline = "Ready to sign off.";

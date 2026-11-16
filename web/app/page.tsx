@@ -1,8 +1,9 @@
 "use client";
 
 import { FilePlus2, FolderOpen, Moon, Play, Search, Sun } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL, getJSON, streamEvents } from "@/lib/api";
+import { author, suiteName } from "@/lib/author";
 import type { Batch, Health, Matrix, RequirementSet, RequirementSetSummary, Run, StreamEvent } from "@/lib/types";
 import { CaseSheet } from "@/components/CaseSheet";
 import { CaseTable, TraceTable } from "@/components/CaseTable";
@@ -88,16 +89,22 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Switching suites quickly starts overlapping loads; only the latest one may update the page,
+  // or a slow response for the previous suite would show its data under the new suite's name.
+  const loading = useRef<string | null>(null);
   const refreshSet = useCallback(async (id: string) => {
+    loading.current = id;
     const [d, b, m] = await Promise.all([
       getJSON<RequirementSet>(`/api/requirement-sets/${id}`),
       getJSON<Batch[]>(`/api/batches?requirement_set_id=${id}`),
       getJSON<Matrix>(`/api/requirement-sets/${id}/matrix`),
     ]);
+    if (loading.current !== id) return;
     setDetail(d); setBatches(b); setMatrix(m);
     const last = b[b.length - 1];
     if (last && last.total > 0) {
       const r = await getJSON<{ runs: Run[] }>(`/api/batches/${last.id}`);
+      if (loading.current !== id) return;
       setRuns(Object.fromEntries(r.runs.map((x) => [x.test_case_id, x])));
     } else {
       setRuns({});
@@ -189,7 +196,8 @@ export default function Dashboard() {
               <li key={s.id}>
                 <button aria-current={view === "suite" && s.id === selected}
                   onClick={() => { setView("suite"); setSelected(s.id); setOpen(null); }}>
-                  <FolderOpen size={16} aria-hidden /><span className="name">{s.source_name.replace(/\.md$/, "")}</span>
+                  <FolderOpen size={16} aria-hidden />
+                  <span className="label"><span className="name">{suiteName(s)}</span><span className="by">{author(s)}</span></span>
                   <span className="count">{s.case_count}</span>
                 </button>
               </li>
@@ -208,7 +216,7 @@ export default function Dashboard() {
               if (e.target.value === "__generate") setView("generate");
               else { setView("suite"); setSelected(e.target.value); }
             }}>
-            {sets.map((s) => <option key={s.id} value={s.id}>{s.source_name}</option>)}
+            {sets.map((s) => <option key={s.id} value={s.id}>{suiteName(s)} · {author(s)}</option>)}
             <option value="__generate">Write a new suite</option>
           </select>
         </div>

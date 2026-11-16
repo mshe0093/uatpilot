@@ -79,3 +79,47 @@ real sandbox defects where the hand-written suite surfaced all 6.
 - TC008's flaw (asserting presence instead of identity) is harder to catch mechanically. It is
   the main gap left: an assertion comparing a filtered result to a captured id is something to
   ask for in the generation prompt and review by hand.
+
+## Second round: regenerated after the fixes
+
+Both suites were regenerated with the same models after the changes above (the generator now
+rejects site-root `expect_url` checks, and its prompt asks for identity checks on filtered
+results and for self-created test data). They are judged by the same rules and the same AI
+reviewer, so the caveats at the top still apply. Both now ship with the demo as
+`examples/suites/*.gemini.seed.json`.
+
+| Suite | Cases | Accept | Minor edit | Rework | Accepted unedited | Criteria excused |
+|---|---|---|---|---|---|---|
+| Restful-Booker API (`gemini-3.5-flash`) | 17 | 12 | 5 | 0 | 71% | 0 of 17 |
+| Sauce Demo UI (`gemini-3.1-flash-lite`) | 11 | 6 | 5 | 0 | 55% | 2 of 13 |
+| **Total** | **28** | **18** | **10** | **0** | **64%** | |
+
+**Fixed:**
+- **No rework left.** The filter case (TC008) now asserts the response contains the id of the
+  booking it just created.
+- **Logout:** the logout case checks for the login button, not the site root.
+- **Shared data:** the delete and timing cases create their own booking instead of using shared
+  booking `1`.
+- **Gate fired live:** the new check rejected a site-root URL assertion during generation, and the
+  model corrected it before the suite was accepted.
+- Run for real: the UI suite passes 11/11. The API suite fails only on 3 genuine sandbox defects.
+
+**Got worse, or still open:**
+- **API TC011:** dropped the `401` check, keeping only "no token". It no longer reports the
+  sandbox's `200`-on-wrong-password defect (3 real defects found, down from 4).
+- **UI error messages:** Flash-Lite checks that an error message is *visible* rather than what it
+  says (TC002, TC003, TC004, TC010), and it excused the two sorting criteria (AC-2.2, AC-2.3) with
+  boilerplate. That is within the gate's limit of a quarter, but a reviewer would reject the
+  reason.
+- Unchanged minor gaps: the numeric `bookingid`, checking only the first list item, `204` vs
+  any 2xx, and the skipped overview page.
+
+**Fault-injection eval of the regenerated API suite** (rules triage, `results/gemini-v2/`):
+19/20 injected bugs detected, triage 15/15. The one miss, `patch_clobbers_lastname`, changes the
+PATCH *response*. The new TC014 asserts only `firstname` on that response and checks the other
+fields with a separate GET, so the bug passes. That is the "minor" gap noted for TC014 above: a
+strictness gap can still hide a real bug.
+
+**Takeaway:** the mechanical checks removed the class of case that can never fail or fails on a
+correct app. What is left is *strictness*, which a person still has to review. The smaller model
+writes noticeably weaker UI assertions than the larger one.

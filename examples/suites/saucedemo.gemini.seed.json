@@ -1,0 +1,610 @@
+{
+  "requirements": "../requirements/saucedemo.md",
+  "target_kind": "ui",
+  "base_url": "https://www.saucedemo.com",
+  "generated_by": "gemini:gemini-3.1-flash-lite",
+  "note": "Written by gemini:gemini-3.1-flash-lite from the requirements document, unedited.",
+  "test_cases": [
+    {
+      "title": "Successful login with standard user",
+      "requirement_ref": "AC-1.1",
+      "preconditions": [],
+      "steps": [
+        "Navigate to the login page.",
+        "Enter valid credentials (standard_user / secret_sauce).",
+        "Click the Login button.",
+        "Verify the URL contains '/inventory.html'.",
+        "Verify the page heading says 'Products'."
+      ],
+      "expected_result": "User is redirected to the products page and sees the title 'Products'.",
+      "priority": "high",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "expect_url",
+            "selector": "https://www.saucedemo.com/inventory.html",
+            "value": "/inventory.html"
+          },
+          {
+            "action": "expect_text",
+            "selector": ".title",
+            "value": "Products"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Failed login with locked out user",
+      "requirement_ref": "AC-1.2",
+      "preconditions": [],
+      "steps": [
+        "Navigate to the login page.",
+        "Enter locked_out_user and password.",
+        "Click the Login button.",
+        "Verify that an error message is displayed indicating the account is locked out."
+      ],
+      "expected_result": "User remains on the login page and sees a locked out error message.",
+      "priority": "high",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "locked_out_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "expect_visible",
+            "selector": "[data-test=error]",
+            "value": null
+          }
+        ]
+      }
+    },
+    {
+      "title": "Failed login with wrong credentials",
+      "requirement_ref": "AC-1.3",
+      "preconditions": [],
+      "steps": [
+        "Navigate to the login page.",
+        "Enter invalid username and password.",
+        "Click the Login button.",
+        "Verify that an error message is displayed."
+      ],
+      "expected_result": "User remains on the login page and sees an error message.",
+      "priority": "medium",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "invalid_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "wrong_password"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "expect_visible",
+            "selector": "[data-test=error]",
+            "value": null
+          }
+        ]
+      }
+    },
+    {
+      "title": "Failed login with empty username",
+      "requirement_ref": "AC-1.4",
+      "preconditions": [],
+      "steps": [
+        "Navigate to the login page.",
+        "Leave username empty and enter a password.",
+        "Click the Login button.",
+        "Verify that an error message indicating the username is required is displayed."
+      ],
+      "expected_result": "User remains on the login page and sees an error message stating username is required.",
+      "priority": "medium",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "expect_visible",
+            "selector": "[data-test=error]",
+            "value": null
+          }
+        ]
+      }
+    },
+    {
+      "title": "Verify product catalog count",
+      "requirement_ref": "AC-2.1",
+      "preconditions": [],
+      "steps": [
+        "Log in as standard_user.",
+        "Verify there are 6 inventory items listed on the page."
+      ],
+      "expected_result": "The products page shows exactly 6 items.",
+      "priority": "medium",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "expect_count",
+            "selector": "[data-test=inventory-item]",
+            "value": "6"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Add product to cart badge",
+      "requirement_ref": "AC-3.1",
+      "preconditions": [],
+      "steps": [
+        "Log in as standard_user.",
+        "Add 'Sauce Labs Backpack' to the cart.",
+        "Verify cart badge shows 1."
+      ],
+      "expected_result": "Cart badge shows 1.",
+      "priority": "medium",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=add-to-cart-sauce-labs-backpack]",
+            "value": null
+          },
+          {
+            "action": "expect_text",
+            "selector": "[data-test=shopping-cart-badge]",
+            "value": "1"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Add two products to cart",
+      "requirement_ref": "AC-3.2",
+      "preconditions": [],
+      "steps": [
+        "Log in as standard_user.",
+        "Add two different products to the cart.",
+        "Verify cart badge shows 2.",
+        "Go to the cart page.",
+        "Verify 2 items in the cart list."
+      ],
+      "expected_result": "Cart badge shows 2 and 2 products listed.",
+      "priority": "medium",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=add-to-cart-sauce-labs-backpack]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=add-to-cart-sauce-labs-bike-light]",
+            "value": null
+          },
+          {
+            "action": "expect_text",
+            "selector": "[data-test=shopping-cart-badge]",
+            "value": "2"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=shopping-cart-link]",
+            "value": null
+          },
+          {
+            "action": "expect_count",
+            "selector": "[data-test=inventory-item]",
+            "value": "2"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Remove product from cart",
+      "requirement_ref": "AC-3.3",
+      "preconditions": [],
+      "steps": [
+        "Log in as standard_user.",
+        "Add one product and go to cart.",
+        "Remove the product.",
+        "Verify cart is empty (badge hidden and list count is 0)."
+      ],
+      "expected_result": "Product removed and cart empty.",
+      "priority": "medium",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=add-to-cart-sauce-labs-backpack]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=shopping-cart-link]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=remove-sauce-labs-backpack]",
+            "value": null
+          },
+          {
+            "action": "expect_hidden",
+            "selector": "[data-test=shopping-cart-badge]",
+            "value": null
+          },
+          {
+            "action": "expect_count",
+            "selector": "[data-test=inventory-item]",
+            "value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Complete checkout order",
+      "requirement_ref": "AC-4.1",
+      "preconditions": [],
+      "steps": [
+        "Log in and add product to cart.",
+        "Proceed to checkout.",
+        "Fill in required info.",
+        "Complete checkout and verify confirmation message."
+      ],
+      "expected_result": "Checkout completes successfully with confirmation message.",
+      "priority": "high",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=add-to-cart-sauce-labs-backpack]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=shopping-cart-link]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=checkout]",
+            "value": null
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=firstName]",
+            "value": "John"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=lastName]",
+            "value": "Doe"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=postalCode]",
+            "value": "12345"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=continue]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=finish]",
+            "value": null
+          },
+          {
+            "action": "expect_text",
+            "selector": ".complete-header",
+            "value": "Thank you for your order!"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Checkout validation empty first name",
+      "requirement_ref": "AC-4.2",
+      "preconditions": [],
+      "steps": [
+        "Start checkout.",
+        "Leave first name empty, fill rest of fields.",
+        "Verify error about required field."
+      ],
+      "expected_result": "Error message shows first name is required.",
+      "priority": "medium",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=shopping-cart-link]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=checkout]",
+            "value": null
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=lastName]",
+            "value": "Doe"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=postalCode]",
+            "value": "12345"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=continue]",
+            "value": null
+          },
+          {
+            "action": "expect_visible",
+            "selector": "[data-test=error]",
+            "value": null
+          }
+        ]
+      }
+    },
+    {
+      "title": "Logout functionality",
+      "requirement_ref": "AC-5.1",
+      "preconditions": [],
+      "steps": [
+        "Log in as standard_user.",
+        "Open the side menu.",
+        "Click Logout.",
+        "Verify the Login button is visible (meaning we are on the login page)."
+      ],
+      "expected_result": "User is logged out and returned to login page.",
+      "priority": "high",
+      "executable": {
+        "kind": "ui",
+        "steps": [
+          {
+            "action": "goto",
+            "selector": "https://www.saucedemo.com",
+            "value": "https://www.saucedemo.com"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=username]",
+            "value": "standard_user"
+          },
+          {
+            "action": "fill",
+            "selector": "[data-test=password]",
+            "value": "secret_sauce"
+          },
+          {
+            "action": "click",
+            "selector": "[data-test=login-button]",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "#react-burger-menu-btn",
+            "value": null
+          },
+          {
+            "action": "click",
+            "selector": "#logout_sidebar_link",
+            "value": null
+          },
+          {
+            "action": "expect_visible",
+            "selector": "[data-test=login-button]",
+            "value": null
+          }
+        ]
+      }
+    }
+  ],
+  "not_covered": [
+    {
+      "requirement_ref": "AC-2.2",
+      "reason": "Requires manual verification or complex state setup not feasible via simple UI steps for an automated UAT suite."
+    },
+    {
+      "requirement_ref": "AC-2.3",
+      "reason": "Requires manual verification or complex state setup not feasible via simple UI steps for an automated UAT suite."
+    }
+  ]
+}

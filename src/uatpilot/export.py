@@ -226,3 +226,29 @@ def to_csv(store: Store, set_id: str) -> str:
             ]
         )
     return buf.getvalue()
+
+
+def to_seed(store: Store, set_id: str) -> str:
+    """The suite in the format `uatpilot import` reads (see examples/suites), keeping who wrote it.
+    Used to ship agent-written suites with the demo so visitors see the agent's own output."""
+    import json
+
+    rs = store.requirement_set(set_id)
+    if rs is None:
+        raise KeyError(set_id)
+    doc = {
+        "requirements": f"../requirements/{rs['source_name']}",
+        "target_kind": rs["target_kind"],
+        "base_url": rs["base_url"],
+        "generated_by": rs["generated_by"],
+        "note": f"Written by {rs['generated_by']} from the requirements document, unedited.",
+        "test_cases": [
+            c.model_dump(mode="json", exclude={"id", "requirement_set_id"})
+            for c in store.test_cases(set_id)
+        ],
+        "not_covered": [
+            {"requirement_ref": ref, "reason": reason}
+            for ref, reason in ((rs.get("coverage") or {}).get("not_covered") or {}).items()
+        ],
+    }
+    return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"

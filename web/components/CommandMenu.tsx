@@ -3,6 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Command } from "cmdk";
 import { Download, FilePlus2, FolderOpen, Moon, Play, Search } from "lucide-react";
+import { author, suiteName } from "@/lib/author";
 import type { RequirementSetSummary, TestCase } from "@/lib/types";
 
 export interface Action {
@@ -46,8 +47,8 @@ export function CommandMenu({ open, onOpenChange, sets, cases, onSet, onCase, ac
               </Command.Group>
               <Command.Group heading="Suites">
                 {sets.map((s) => (
-                  <Command.Item key={s.id} value={`suite ${s.source_name}`} onSelect={close(() => onSet(s.id))}>
-                    <FolderOpen size={15} />{s.source_name}<span className="muted small" style={{ marginLeft: "auto" }}>{s.case_count} cases</span>
+                  <Command.Item key={s.id} value={`suite ${s.source_name} ${author(s)}`} onSelect={close(() => onSet(s.id))}>
+                    <FolderOpen size={15} />{suiteName(s)}<span className="muted small">{author(s)}</span><span className="muted small" style={{ marginLeft: "auto" }}>{s.case_count} cases</span>
                   </Command.Item>
                 ))}
               </Command.Group>
